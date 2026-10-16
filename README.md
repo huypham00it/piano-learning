@@ -15,6 +15,10 @@ Webapp giúp ghi nhớ hợp âm piano. Kết nối đàn với máy tính qua *
   4. Nhìn phím đàn được tô sáng → chọn tên đúng
   
   Tùy chọn: số câu, thế gốc/thế đảo, kiểm tra nốt trầm, giới hạn thời gian mỗi câu, gợi ý sau N lần sai. Khi chơi sai, ứng dụng hiển thị nốt bạn chơi cạnh đáp án trên khuông nhạc và tô đỏ phím sai.
+- **Vòng hợp âm** (tab ④): tạo danh sách hợp âm theo thứ tự — từ vòng mẫu theo giọng (I–V–vi–IV, I–vi–IV–V, vi–ii–V–I, Canon, ii–V–I, Blues 12 ô nhịp, các vòng giọng thứ…) hoặc tự thêm từng hợp âm, sắp xếp lại, lưu/mở nhiều vòng.
+  - Tự chọn thế bấm **dẫn giọng mượt** (tay di chuyển ít nhất, giữ nốt chung), có thể chỉnh thế bấm từng hợp âm; tay trái chơi nốt gốc hoặc quãng 8.
+  - **Chỉ dẫn ngón tay**: số ngón (1 = ngón cái … 5 = ngón út) hiện trên phím đàn (xanh = tay phải, cam = tay trái) và trên khuông nhạc; phím viền vàng báo trước hợp âm kế tiếp; hướng dẫn từng bước chuyển hợp âm (“Giữ nguyên phím G bằng ngón 5”, “Ngón 1: C → B (xuống nửa cung)”, “Tay trái: C → G”…).
+  - 3 chế độ: xem từng bước, luyện chờ chơi đúng (đo thời gian từng lần chuyển hợp âm, chỉ ra bước chuyển chậm/sai), luyện theo nhịp với máy đếm nhịp (BPM, số phách mỗi hợp âm, đếm vào 1 ô nhịp). Có thể kiểm tra đúng thế bấm và tay trái.
 - **Lặp lại ngắt quãng (Leitner)**: mỗi hợp âm có "mức nhớ" 1–5; hợp âm hay sai hoặc chơi chậm sẽ xuất hiện thường xuyên hơn. Tab **Thống kê** cho thấy độ chính xác, thời gian trung bình và cho phép luyện riêng các hợp âm yếu.
 - Thanh dưới cùng luôn hiển thị các nốt đang bấm, tên hợp âm nhận diện được và khuông nhạc nhỏ.
 - Dữ liệu (hợp âm đã chọn, thiết lập, thống kê) được lưu trong trình duyệt (localStorage).
@@ -45,7 +49,7 @@ Workflow `.github/workflows/pages.yml` chạy test rồi triển khai khi push l
 npm test
 ```
 
-Các test (`tests/theory.test.js`) kiểm tra ký âm hợp âm, thế đảo, nhận diện hợp âm và chấm điểm.
+Các test kiểm tra ký âm hợp âm, thế đảo, nhận diện và chấm điểm (`tests/theory.test.js`), cũng như vòng hợp âm: tên hợp âm theo giọng, số ngón tay, dẫn giọng, chấm thế bấm và hướng dẫn chuyển hợp âm (`tests/progression.test.js`).
 
 ## Cấu trúc
 
@@ -54,6 +58,8 @@ index.html        Giao diện chính
 css/style.css     Giao diện (hỗ trợ chế độ tối, responsive)
 js/theory.js      Lý thuyết nhạc: ký âm, dựng hợp âm, thế đảo, nhận diện
 js/practice.js    Bộ máy bài tập: chọn câu hỏi theo trọng số, đáp án nhiễu, thống kê
+js/progression.js Vòng hợp âm: vòng mẫu, dẫn giọng, số ngón tay, chấm điểm, hướng dẫn chuyển hợp âm
+js/progressionView.js Giao diện tab Vòng hợp âm (xem từng bước, luyện chờ đúng, luyện theo nhịp)
 js/staff.js       Vẽ khuông nhạc (SVG)
 js/glyphs.js      Hình khóa nhạc và dấu hóa (trích từ font GNU FreeSerif)
 js/keyboard.js    Bàn phím piano trên màn hình

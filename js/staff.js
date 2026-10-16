@@ -43,36 +43,57 @@ const ACC = {
 /**
  * Render a grand staff.
  * @param {HTMLElement} container
- * @param {Array<{notes: Array<{step:number, acc:number, midi:number, color?:string}>, label?:string, color?:string}>} columns
- * @param {{width?:number, showNaturals?:boolean}} opts
+ * @param {Array<{notes: Array<{step:number, acc:number, midi:number, color?:string, finger?:number}>, label?:string, color?:string, highlight?:boolean}>} columns
+ * @param {{width?:number, colGap?:number, barlines?:boolean, scale?:number, ariaLabel?:string, onColumnClick?:(i:number)=>void}} opts
  */
 export function renderStaff(container, columns = [], opts = {}) {
-  const colGap = 90;
-  const width = opts.width ?? Math.max(340, FIRST_COL_X + Math.max(1, columns.length) * colGap + 20);
+  const colGap = opts.colGap ?? 90;
+  const lead = opts.barlines ? 30 : 10;
+  const width = opts.width ?? Math.max(340, FIRST_COL_X + lead + Math.max(1, columns.length) * colGap + 10);
   const svg = el('svg', {
     viewBox: `0 0 ${width} ${HEIGHT}`,
     class: 'staff-svg',
     role: 'img',
     'aria-label': opts.ariaLabel ?? 'Khuông nhạc',
   });
+  if (opts.scale) svg.style.width = `${width * opts.scale}px`;
 
   const ink = 'var(--staff-ink)';
+  const colX = (i) =>
+    columns.length === 1 && !opts.barlines ? FIRST_COL_X + (width - FIRST_COL_X - 20) / 2 : FIRST_COL_X + lead + i * colGap;
+
+  // Column highlight (drawn first, behind everything)
+  columns.forEach((col, i) => {
+    if (!col.highlight) return;
+    el('rect', {
+      x: colX(i) - colGap / 2 + 4, y: 14, width: colGap - 8, height: HEIGHT - 18, rx: 8,
+      fill: 'var(--primary)', 'fill-opacity': 0.12,
+    }, svg);
+  });
+
   // Staff lines
   for (let i = 0; i < 5; i++) {
     el('line', { x1: 4, x2: width - 4, y1: TREBLE_BOTTOM_Y - i * SP, y2: TREBLE_BOTTOM_Y - i * SP, stroke: ink, 'stroke-width': 1 }, svg);
     el('line', { x1: 4, x2: width - 4, y1: BASS_BOTTOM_Y - i * SP, y2: BASS_BOTTOM_Y - i * SP, stroke: ink, 'stroke-width': 1 }, svg);
   }
-  // Barlines / brace line
-  el('line', { x1: 4, x2: 4, y1: TREBLE_BOTTOM_Y - 4 * SP, y2: BASS_BOTTOM_Y, stroke: ink, 'stroke-width': 1.5 }, svg);
-  el('line', { x1: width - 4, x2: width - 4, y1: TREBLE_BOTTOM_Y - 4 * SP, y2: BASS_BOTTOM_Y, stroke: ink, 'stroke-width': 1.5 }, svg);
+  const barline = (x, w = 1.5) =>
+    el('line', { x1: x, x2: x, y1: TREBLE_BOTTOM_Y - 4 * SP, y2: BASS_BOTTOM_Y, stroke: ink, 'stroke-width': w }, svg);
+  barline(4);
+  barline(width - 4);
+  if (opts.barlines) for (let i = 0; i < columns.length - 1; i++) barline(colX(i) + colGap * 0.4, 1);
 
   // Clefs: treble anchored at G4 line (step 32), bass at F3 line (step 24).
   glyph(svg, 'treble', CLEF_X, stepY(32, 'treble') + 160 * 0.058, 0.058, ink);
   glyph(svg, 'bass', CLEF_X + 2, stepY(24, 'bass') + 565 * 0.058, 0.058, ink);
 
   columns.forEach((col, i) => {
-    const x = columns.length === 1 ? FIRST_COL_X + (width - FIRST_COL_X - 20) / 2 : FIRST_COL_X + i * colGap + 10;
-    drawColumn(svg, col, x);
+    const g = drawColumn(svg, col, colX(i));
+    if (opts.onColumnClick) {
+      // Invisible hit area so the whole column is clickable.
+      el('rect', { x: colX(i) - colGap / 2 + 4, y: 0, width: colGap - 8, height: HEIGHT, fill: 'transparent' }, g);
+      g.style.cursor = 'pointer';
+      g.addEventListener('click', () => opts.onColumnClick(i));
+    }
   });
 
   container.replaceChildren(svg);
@@ -145,7 +166,26 @@ function drawColumn(svg, col, x) {
       const head = el('g', { transform: `translate(${cx} ${cy})`, class: 'note-head' }, g);
       el('ellipse', { rx: 6.6, ry: 4.6, fill: color }, head);
       el('ellipse', { rx: 3.5, ry: 2.3, fill: 'var(--staff-paper)', transform: 'rotate(-55)' }, head);
+      // Left-hand fingers sit beside their note (few notes, wide apart).
+      if (n.finger && clef === 'bass') {
+        el('text', { x: x + Math.max(...offsets) + 11, y: cy + 3.5, class: 'staff-finger', fill: 'var(--hand-l)' }, g).textContent = n.finger;
+      }
     });
+
+    // Right-hand fingers: stacked above the chord, lowest note's finger at the bottom (standard engraving).
+    if (clef === 'treble') {
+      const fingered = notes.filter((n) => n.finger);
+      const base = Math.min(stepY(TREBLE_BOTTOM_STEP + 8, 'treble'), stepY(notes[notes.length - 1].step, 'treble')) - 9;
+      fingered.forEach((n, i) => {
+        el('text', {
+          x: x + Math.max(...offsets) / 2,
+          y: base - i * 9,
+          'text-anchor': 'middle',
+          class: 'staff-finger',
+          fill: 'var(--hand-r)',
+        }, g).textContent = n.finger;
+      });
+    }
   }
 
   if (col.label) {
@@ -157,4 +197,5 @@ function drawColumn(svg, col, x) {
       fill: col.color ?? 'var(--staff-ink)',
     }, g).textContent = col.label;
   }
+  return g;
 }

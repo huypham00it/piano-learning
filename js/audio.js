@@ -89,6 +89,22 @@ export class Synth {
     midis.forEach((m, i) => this.noteOn(m, 85, arpeggio ? i * 0.22 : i * 0.012, duration + (arpeggio ? (midis.length - i) * 0.22 : 0)));
   }
 
+  /** Metronome tick (accent on the first beat of a chord). */
+  click(accent = false) {
+    const ctx = this.ensure();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'square';
+    o.frequency.value = accent ? 1760 : 1100;
+    g.gain.setValueAtTime(accent ? 0.06 : 0.035, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+    o.connect(g).connect(this.master);
+    o.start(t);
+    o.stop(t + 0.06);
+  }
+
   /** Short feedback blips. */
   feedback(ok) {
     const ctx = this.ensure();

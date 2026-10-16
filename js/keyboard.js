@@ -53,6 +53,9 @@ export class PianoKeyboard {
       const label = document.createElement('span');
       label.className = 'key-label';
       key.appendChild(label);
+      const finger = document.createElement('span');
+      finger.className = 'finger';
+      key.appendChild(finger);
       if (mod12(m) === 0) {
         const oct = document.createElement('span');
         oct.className = 'key-octave';
@@ -70,7 +73,8 @@ export class PianoKeyboard {
   }
 
   /**
-   * @param {{pressed?:Iterable<number>, target?:Iterable<number>, wrong?:Iterable<number>, correct?:Iterable<number>, labels?:Map<number,string>}} state
+   * @param {{pressed?:Iterable<number>, target?:Iterable<number>, wrong?:Iterable<number>, correct?:Iterable<number>,
+   *   next?:Iterable<number>, fingers?:Map<number,{finger:number, hand:'L'|'R'}>, labels?:Map<number,string>}} state
    */
   render(state) {
     this.lastState = state;
@@ -78,11 +82,17 @@ export class PianoKeyboard {
     const target = new Set(state.target ?? []);
     const wrong = new Set(state.wrong ?? []);
     const correct = new Set(state.correct ?? []);
+    const next = new Set(state.next ?? []);
     for (const [m, key] of this.keys) {
       key.classList.toggle('pressed', pressed.has(m));
       key.classList.toggle('target', target.has(m));
       key.classList.toggle('wrong', wrong.has(m));
       key.classList.toggle('correct', correct.has(m));
+      key.classList.toggle('next', next.has(m) && !target.has(m));
+      const f = state.fingers?.get(m);
+      const badge = key.querySelector('.finger');
+      badge.textContent = f ? f.finger : '';
+      badge.className = f ? `finger hand-${f.hand}` : 'finger';
       const label = key.firstChild;
       const custom = state.labels?.get(m);
       label.textContent = custom ?? (this.showLabels || pressed.has(m) ? this.labelFor(m) : '');

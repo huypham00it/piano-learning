@@ -2,7 +2,7 @@
 // Pure module (no DOM) so it can be unit-tested with `node --test`.
 
 export const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
-const LETTER_PC = [0, 2, 4, 5, 7, 9, 11];
+export const LETTER_PC = [0, 2, 4, 5, 7, 9, 11];
 
 // Preferred root spellings for each pitch class, depending on chord quality.
 const ROOT_SPELLINGS = {
@@ -129,14 +129,14 @@ export function maxInversion(typeId) {
 }
 
 /**
- * Build a chord.
+ * Build a chord. `rootNameOverride` lets callers spell the root in a key context (e.g. D# instead of Eb).
  * @returns {{id, pc, typeId, type, root, symbol, notes, pcs, bassPc, inversion, label}}
  * `notes` is a voiced list (ascending) with lowest note in octave 4 range (MIDI 60..71).
  */
-export function buildChord(pc, typeId, inversion = 0) {
+export function buildChord(pc, typeId, inversion = 0, rootNameOverride = null) {
   const type = TYPE_BY_ID[typeId];
   if (!type) throw new Error(`Unknown chord type ${typeId}`);
-  const rootName = rootNameFor(pc, typeId);
+  const rootName = rootNameOverride ?? rootNameFor(pc, typeId);
   const root = parseNoteName(rootName);
   const rootOctave = 4;
   const rootMidi = 12 * (rootOctave + 1) + LETTER_PC[root.letter] + root.acc;

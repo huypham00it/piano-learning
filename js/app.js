@@ -8,6 +8,7 @@ import { MidiInput } from './midi.js';
 import { Synth } from './audio.js';
 import { load, save } from './storage.js';
 import { MODES, MAX_BOX, nextQuestion, recordResult, emptyStat } from './practice.js';
+import { createProgressionView } from './progressionView.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -29,6 +30,7 @@ const state = {
 
 const synth = new Synth();
 const midi = new MidiInput();
+let progView = null; // created once the rest of the UI is ready
 
 const activeNotes = () => [...new Set([...state.held, ...state.latched])].sort((a, b) => a - b);
 
@@ -65,9 +67,14 @@ const piano = new PianoKeyboard($('#piano'), { start: 48, end: 84, onPress: onSc
 
 function fitPianoRange() {
   const w = window.innerWidth;
-  if (w >= 1100) piano.setRange(36, 96);
-  else if (w >= 700) piano.setRange(48, 84);
-  else piano.setRange(55, 84);
+  let [lo, hi] = w >= 1100 ? [36, 96] : w >= 700 ? [48, 84] : [55, 84];
+  // Progressions may use a left-hand bass below the default range: widen (the piano scrolls if needed).
+  const r = state.tab === 'prog' ? progView?.noteRange() : null;
+  if (r) {
+    lo = Math.min(lo, r.lo - mod12(r.lo));
+    hi = Math.max(hi, r.hi + 11 - mod12(r.hi));
+  }
+  piano.setRange(lo, hi);
 }
 window.addEventListener('resize', fitPianoRange);
 fitPianoRange();
@@ -106,6 +113,7 @@ function clearLatched() {
 function contextChord() {
   if (state.tab === 'practice' && practice.q) return practice.q.chord;
   if (state.tab === 'learn') return learn.chord;
+  if (state.tab === 'prog') return progView?.current()?.chord ?? null;
   return null;
 }
 
@@ -126,6 +134,7 @@ function notesChanged(source) {
 
   if (state.tab === 'learn') learn.check(notes);
   if (state.tab === 'practice') practice.onNotes(notes, source);
+  if (state.tab === 'prog') progView?.onNotes(notes);
   renderPiano();
 }
 
@@ -140,15 +149,18 @@ function renderMiniStaff(notes, chord) {
 }
 
 function highlightPlayed() {
-  if (state.tab === 'learn') return true;
+  if (state.tab === 'learn' || state.tab === 'prog') return true;
   if (state.tab === 'practice' && practice.q) return practice.q.revealed || practice.q.done || practice.q.hint;
   return false;
 }
 
 function renderPiano() {
   const pressed = activeNotes();
-  const view = { pressed, target: [], correct: [], wrong: [] };
   const chord = contextChord();
+  piano.showLabels = state.prefs.labels;
+  piano.labelFor = (m) => pretty(spellPlayed(m, chord).name);
+  if (state.tab === 'prog' && progView) return piano.render(progView.pianoState(pressed));
+  const view = { pressed, target: [], correct: [], wrong: [] };
   let showTarget = false;
   let judge = false;
   if (state.tab === 'learn' && chord) {
@@ -163,8 +175,6 @@ function renderPiano() {
   if (judge && chord) {
     for (const m of pressed) (chord.pcs.includes(mod12(m)) ? view.correct : view.wrong).push(m);
   }
-  piano.showLabels = state.prefs.labels;
-  piano.labelFor = (m) => pretty(spellPlayed(m, chord).name);
   piano.render(view);
 }
 
@@ -174,7 +184,8 @@ const kbDown = new Map();
 
 function isTyping(e) {
   const tag = e.target?.tagName;
-  return tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || e.target?.isContentEditable;
+  const textInput = tag === 'INPUT' && !['checkbox', 'radio', 'range', 'button'].includes(e.target.type);
+  return textInput || tag === 'SELECT' || tag === 'TEXTAREA' || e.target?.isContentEditable;
 }
 
 window.addEventListener('keydown', (e) => {
@@ -290,7 +301,10 @@ bindToggle('#labelToggle', 'labels', renderPiano);
 // ---------------------------------------------------------------- tabs
 function setTab(tab) {
   if (state.tab === 'practice' && tab !== 'practice') practice.pauseTimer();
+  if (state.tab === 'prog' && tab !== 'prog') progView.stop();
   state.tab = tab;
+  fitPianoRange();
+  if (tab === 'prog') progView.render();
   $$('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
   $$('.panel').forEach((p) => p.classList.toggle('active', p.id === `tab-${tab}`));
   if (tab === 'learn') learn.render();
@@ -910,6 +924,16 @@ $('#practiceWeak').addEventListener('click', () => {
   renderGrid();
   toast(`Đã chọn ${weak.length} hợp âm yếu để luyện.`);
   setTab('practice');
+});
+
+// ---------------------------------------------------------------- progressions
+progView = createProgressionView({
+  synth,
+  pretty,
+  toast,
+  activeNotes,
+  refresh: () => progView && state.tab === 'prog' && notesChanged('prog'),
+  onRangeChange: () => progView && fitPianoRange(),
 });
 
 // ---------------------------------------------------------------- init

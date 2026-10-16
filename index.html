@@ -33,7 +33,8 @@
     <button role="tab" data-tab="select" class="tab active">① Chọn hợp âm</button>
     <button role="tab" data-tab="learn" class="tab">② Học</button>
     <button role="tab" data-tab="practice" class="tab">③ Luyện tập</button>
-    <button role="tab" data-tab="stats" class="tab">④ Thống kê</button>
+    <button role="tab" data-tab="prog" class="tab">④ Vòng hợp âm</button>
+    <button role="tab" data-tab="stats" class="tab">⑤ Thống kê</button>
   </nav>
 
   <main>
@@ -189,6 +190,120 @@
           <button class="btn" id="setupBtn">Đổi thiết lập</button>
         </div>
       </div>
+    </section>
+
+    <!-- PROGRESSION -->
+    <section id="tab-prog" class="panel" role="tabpanel">
+      <div class="prog-top">
+        <div class="card prog-builder">
+          <h2>Tạo vòng hợp âm</h2>
+          <p class="muted small">Chọn một vòng mẫu theo giọng hoặc tự thêm từng hợp âm theo thứ tự. Thế bấm được tự chọn để tay di chuyển ít nhất (dẫn giọng mượt) — bạn có thể đổi thế bấm của từng hợp âm.</p>
+          <div class="builder-row">
+            <select id="progPreset" aria-label="Vòng mẫu"></select>
+            <select id="progKey" aria-label="Giọng"></select>
+            <button id="progUsePreset" class="btn">Dùng mẫu</button>
+          </div>
+          <div class="builder-row">
+            <select id="progRoot" aria-label="Nốt gốc"></select>
+            <select id="progType" aria-label="Loại hợp âm"></select>
+            <button id="progAdd" class="btn">+ Thêm vào vòng</button>
+          </div>
+          <ol id="progList" class="prog-list"></ol>
+          <div class="builder-row">
+            <label class="inline">Tay trái
+              <select id="progBass">
+                <option value="none">Không dùng</option>
+                <option value="root">Nốt gốc (ngón 5)</option>
+                <option value="octave">Quãng 8 nốt gốc (ngón 5 – 1)</option>
+              </select>
+            </label>
+            <button id="progClear" class="btn danger btn-small">Xóa vòng</button>
+          </div>
+          <details class="saved">
+            <summary>Lưu / mở vòng hợp âm</summary>
+            <div class="builder-row">
+              <input id="progName" type="text" placeholder="Tên vòng, ví dụ: Bài hát A" maxlength="40" />
+              <button id="progSave" class="btn btn-small">Lưu</button>
+            </div>
+            <div class="builder-row">
+              <select id="progSaved" aria-label="Vòng đã lưu"></select>
+              <button id="progOpen" class="btn btn-small">Mở</button>
+              <button id="progDelete" class="btn btn-small danger">Xóa</button>
+            </div>
+          </details>
+        </div>
+
+        <div class="card prog-guide">
+          <div class="seg" id="progModes" role="group" aria-label="Chế độ">
+            <button data-mode="step" class="active">Xem từng bước</button>
+            <button data-mode="wait">Luyện: chờ chơi đúng</button>
+            <button data-mode="tempo">Luyện theo nhịp</button>
+          </div>
+          <div class="prog-settings">
+            <label class="inline">Số vòng
+              <select id="progLoops">
+                <option value="1">1</option><option value="2">2</option><option value="4">4</option><option value="0">Lặp mãi</option>
+              </select>
+            </label>
+            <label class="inline">Tốc độ <input id="progBpm" type="range" min="30" max="160" step="5" /> <b id="progBpmVal"></b> BPM</label>
+            <label class="inline">Phách / hợp âm
+              <select id="progBeats"><option value="2">2</option><option value="3">3</option><option value="4">4</option></select>
+            </label>
+            <label class="inline"><input type="checkbox" id="progStrict" /> Kiểm tra đúng thế bấm &amp; tay trái</label>
+            <label class="inline"><input type="checkbox" id="progShowNext" /> Đánh dấu hợp âm kế tiếp trên phím</label>
+          </div>
+
+          <div class="prog-now">
+            <button class="btn btn-icon" id="progPrev" aria-label="Hợp âm trước">‹</button>
+            <div class="prog-now-main">
+              <div class="prog-counter muted small" id="progCounter"></div>
+              <div id="progSymbol" class="big-symbol">—</div>
+              <div id="progTitle" class="muted"></div>
+            </div>
+            <button class="btn btn-icon" id="progNext" aria-label="Hợp âm tiếp">›</button>
+          </div>
+          <div class="beats" id="progBeatsView" hidden></div>
+          <div class="hands">
+            <div class="hand hand-r-box"><span class="hand-tag">Tay phải</span><b id="progRH">—</b></div>
+            <div class="hand hand-l-box" id="progLHBox"><span class="hand-tag">Tay trái</span><b id="progLH">—</b></div>
+            <div class="hand next-box"><span class="hand-tag">Tiếp theo</span><b id="progNextLabel">—</b></div>
+          </div>
+          <div class="tips">
+            <div class="tips-title" id="progTipsTitle">Cách chuyển hợp âm</div>
+            <ul id="progTips"></ul>
+          </div>
+          <p id="progFeedback" class="feedback info" aria-live="polite"></p>
+          <div class="btn-row center">
+            <button class="btn" id="progListen">▶ Nghe cả vòng</button>
+            <button class="btn btn-primary" id="progStart">Bắt đầu luyện</button>
+            <button class="btn danger" id="progStop" hidden>■ Dừng</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card prog-sheet">
+        <div class="panel-head">
+          <h3>Bản nhạc vòng hợp âm <span class="muted small">(bấm vào ô nhịp để chọn hợp âm)</span></h3>
+          <div class="legend small">
+            <span><i class="dot dot-r"></i>Số ngón tay phải</span>
+            <span><i class="dot dot-l"></i>Số ngón tay trái</span>
+            <span>1 = ngón cái · 2 = ngón trỏ · 3 = ngón giữa · 4 = ngón áp út · 5 = ngón út</span>
+          </div>
+        </div>
+        <div id="progStaff" class="prog-staff"></div>
+        <details class="howto">
+          <summary>Mẹo đặt tay khi chơi vòng hợp âm</summary>
+          <ul>
+            <li>Giữ cổ tay thả lỏng, ngang với phím đàn; các ngón cong tự nhiên như đang cầm một quả bóng nhỏ.</li>
+            <li>Nhìn trước hợp âm kế tiếp (phím viền vàng): tìm <b>nốt chung</b> giữa hai hợp âm và giữ nguyên ngón trên nốt đó, chỉ di chuyển các ngón còn lại.</li>
+            <li>Hợp âm 3 nốt: thế gốc và đảo 2 bấm ngón 1–3–5, đảo 1 bấm ngón 1–2–5. Hợp âm 4 nốt thường bấm 1–2–3–5.</li>
+            <li>Tay trái chơi nốt gốc bằng ngón 5 (hoặc 5–1 cho quãng 8) giúp hợp âm đầy đặn; nhấc tay trái sớm một chút trước khi chuyển hợp âm.</li>
+            <li>Tập chậm ở chế độ “chờ chơi đúng” trước, khi chuyển hợp âm dưới 1 giây hãy chuyển sang “theo nhịp” và tăng dần tốc độ.</li>
+          </ul>
+        </details>
+      </div>
+
+      <div id="progSummary" class="card prog-summary" hidden></div>
     </section>
 
     <!-- STATS -->
