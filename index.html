@@ -196,41 +196,61 @@
     <section id="tab-prog" class="panel" role="tabpanel">
       <div class="prog-top">
         <div class="card prog-builder">
-          <h2>Tạo vòng hợp âm</h2>
-          <p class="muted small">Chọn một vòng mẫu theo giọng hoặc tự thêm từng hợp âm theo thứ tự. Thế bấm được tự chọn để tay di chuyển ít nhất (dẫn giọng mượt) — bạn có thể đổi thế bấm của từng hợp âm.</p>
-          <div class="builder-row">
-            <select id="progPreset" aria-label="Vòng mẫu"></select>
-            <select id="progKey" aria-label="Giọng"></select>
-            <button id="progUsePreset" class="btn">Dùng mẫu</button>
-          </div>
-          <div class="builder-row">
-            <select id="progRoot" aria-label="Nốt gốc"></select>
-            <select id="progType" aria-label="Loại hợp âm"></select>
-            <button id="progAdd" class="btn">+ Thêm vào vòng</button>
-          </div>
-          <ol id="progList" class="prog-list"></ol>
-          <div class="builder-row">
-            <label class="inline">Tay trái
-              <select id="progBass">
-                <option value="none">Không dùng</option>
-                <option value="root">Nốt gốc (ngón 5)</option>
-                <option value="octave">Quãng 8 nốt gốc (ngón 5 – 1)</option>
-              </select>
-            </label>
-            <button id="progClear" class="btn danger btn-small">Xóa vòng</button>
-          </div>
-          <details class="saved">
-            <summary>Lưu / mở vòng hợp âm</summary>
-            <div class="builder-row">
-              <input id="progName" type="text" placeholder="Tên vòng, ví dụ: Bài hát A" maxlength="40" />
-              <button id="progSave" class="btn btn-small">Lưu</button>
+          <div class="builder-head">
+            <div>
+              <h2>Tạo vòng hợp âm</h2>
+              <p class="muted small">Bấm (hoặc kéo) hợp âm từ <b>Bảng hợp âm</b> vào vòng; kéo biểu tượng <b>⠿</b> để sắp xếp lại thứ tự. Thế bấm được tự chọn để tay di chuyển ít nhất — bạn có thể đổi thế bấm của từng hợp âm.</p>
             </div>
             <div class="builder-row">
-              <select id="progSaved" aria-label="Vòng đã lưu"></select>
-              <button id="progOpen" class="btn btn-small">Mở</button>
-              <button id="progDelete" class="btn btn-small danger">Xóa</button>
+              <select id="progPreset" aria-label="Vòng mẫu"></select>
+              <select id="progKey" aria-label="Giọng của vòng mẫu"></select>
+              <button id="progUsePreset" class="btn">Dùng mẫu</button>
             </div>
-          </details>
+          </div>
+
+          <div class="builder-grid">
+            <div class="builder-seq">
+              <div class="sub-head">
+                <h3>Vòng của bạn <span class="muted small" id="progSeqCount"></span></h3>
+                <button id="progClear" class="btn danger btn-small">Xóa vòng</button>
+              </div>
+              <ol id="progList" class="seq" aria-label="Các hợp âm trong vòng, theo thứ tự"></ol>
+              <div class="builder-row">
+                <label class="inline">Tay trái
+                  <select id="progBass">
+                    <option value="none">Không dùng</option>
+                    <option value="root">Nốt gốc (ngón 5)</option>
+                    <option value="octave">Quãng 8 nốt gốc (ngón 5 – 1)</option>
+                  </select>
+                </label>
+              </div>
+              <details class="saved">
+                <summary>Lưu / mở vòng hợp âm</summary>
+                <div class="builder-row">
+                  <input id="progName" type="text" placeholder="Tên vòng, ví dụ: Bài hát A" maxlength="40" />
+                  <button id="progSave" class="btn btn-small">Lưu</button>
+                </div>
+                <div class="builder-row">
+                  <select id="progSaved" aria-label="Vòng đã lưu"></select>
+                  <button id="progOpen" class="btn btn-small">Mở</button>
+                  <button id="progDelete" class="btn btn-small danger">Xóa</button>
+                </div>
+              </details>
+            </div>
+
+            <div class="builder-palette">
+              <div class="sub-head">
+                <h3>Bảng hợp âm</h3>
+                <div class="seg seg-small" id="palTabs" role="tablist" aria-label="Nguồn hợp âm">
+                  <button data-pal="key" class="active">Theo giọng</button>
+                  <button data-pal="selected" title="Các hợp âm đã chọn ở tab ① Chọn hợp âm">Đã chọn</button>
+                  <button data-pal="all">Tất cả</button>
+                </div>
+              </div>
+              <div class="pal-filter" id="palFilter"></div>
+              <div class="palette" id="palette"></div>
+            </div>
+          </div>
         </div>
 
         <div class="card prog-guide">

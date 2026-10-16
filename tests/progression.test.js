@@ -91,3 +91,17 @@ test('transition tips mention common tones and finger moves', () => {
   assert.match(tips, /Ngón 1: C → B \(xuống nửa cung\)/);
   assert.match(tips, /Tay trái: C → G/);
 });
+
+test('key palette spells chords in the key', async () => {
+  const { keyPalette, moveItem } = await import('../js/progression.js');
+  const major = keyPalette('major', 11); // B major
+  assert.deepEqual(major[0].chords.map((c) => itemLabel(c.item)), ['B', 'C#m', 'D#m', 'E', 'F#', 'G#m', 'A#dim']);
+  assert.equal(major[0].chords[6].roman, 'vii°');
+  assert.deepEqual(major[1].chords.map((c) => itemLabel(c.item))[4], 'F#7');
+  const minor = keyPalette('minor', 9); // A minor
+  assert.deepEqual(minor[0].chords.map((c) => itemLabel(c.item)), ['Am', 'Bdim', 'C', 'Dm', 'Em', 'F', 'G']);
+  assert.ok(minor[2].chords.some((c) => itemLabel(c.item) === 'E7'));
+  assert.ok(minor[2].chords.some((c) => itemLabel(c.item) === 'G#dim7'));
+  assert.deepEqual(moveItem(['a', 'b', 'c', 'd'], 0, 2), ['b', 'c', 'a', 'd']);
+  assert.deepEqual(moveItem(['a', 'b', 'c', 'd'], 3, 0), ['d', 'a', 'b', 'c']);
+});

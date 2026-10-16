@@ -15,7 +15,7 @@ Webapp giúp ghi nhớ hợp âm piano. Kết nối đàn với máy tính qua *
   4. Nhìn phím đàn được tô sáng → chọn tên đúng
   
   Tùy chọn: số câu, thế gốc/thế đảo, kiểm tra nốt trầm, giới hạn thời gian mỗi câu, gợi ý sau N lần sai. Khi chơi sai, ứng dụng hiển thị nốt bạn chơi cạnh đáp án trên khuông nhạc và tô đỏ phím sai.
-- **Vòng hợp âm** (tab ④): tạo danh sách hợp âm theo thứ tự — từ vòng mẫu theo giọng (I–V–vi–IV, I–vi–IV–V, vi–ii–V–I, Canon, ii–V–I, Blues 12 ô nhịp, các vòng giọng thứ…) hoặc tự thêm từng hợp âm, sắp xếp lại, lưu/mở nhiều vòng.
+- **Vòng hợp âm** (tab ④): tạo danh sách hợp âm theo thứ tự — từ vòng mẫu theo giọng (I–V–vi–IV, I–vi–IV–V, vi–ii–V–I, Canon, ii–V–I, Blues 12 ô nhịp, các vòng giọng thứ…) hoặc chọn từ **bảng hợp âm** (theo giọng kèm ký hiệu La Mã I, ii, V7…, các hợp âm đã chọn ở tab ①, hoặc tất cả hợp âm theo nốt gốc): bấm để thêm vào cuối, hoặc kéo thả vào đúng vị trí. **Kéo thả** để sắp xếp lại (chuột hoặc cảm ứng; bàn phím: phím mũi tên trên biểu tượng ⠿); lưu/mở nhiều vòng.
   - Tự chọn thế bấm **dẫn giọng mượt** (tay di chuyển ít nhất, giữ nốt chung), có thể chỉnh thế bấm từng hợp âm; tay trái chơi nốt gốc hoặc quãng 8.
   - **Chỉ dẫn ngón tay**: số ngón (1 = ngón cái … 5 = ngón út) hiện trên phím đàn (xanh = tay phải, cam = tay trái) và trên khuông nhạc; phím viền vàng báo trước hợp âm kế tiếp; hướng dẫn từng bước chuyển hợp âm (“Giữ nguyên phím G bằng ngón 5”, “Ngón 1: C → B (xuống nửa cung)”, “Tay trái: C → G”…).
   - 3 chế độ: xem từng bước, luyện chờ chơi đúng (đo thời gian từng lần chuyển hợp âm, chỉ ra bước chuyển chậm/sai), luyện theo nhịp với máy đếm nhịp (BPM, số phách mỗi hợp âm, đếm vào 1 ô nhịp). Có thể kiểm tra đúng thế bấm và tay trái.

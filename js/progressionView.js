@@ -1,7 +1,7 @@
 // UI controller for the "Vòng hợp âm" (chord progression) tab.
 import { CHORD_TYPES, TYPE_BY_ID, INVERSION_NAMES, maxInversion, rootNameFor, solfegeName, mod12 } from './theory.js';
 import {
-  PRESETS, MAJOR_KEYS, MINOR_KEYS, presetItems, itemLabel, voiceProgression, matchStep, transitionTips,
+  PRESETS, MAJOR_KEYS, MINOR_KEYS, presetItems, itemLabel, voiceProgression, matchStep, transitionTips, keyPalette, moveItem,
 } from './progression.js';
 import { renderStaff } from './staff.js';
 import { load, save } from './storage.js';
@@ -9,12 +9,13 @@ import { load, save } from './storage.js';
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
 const ROOT_LABELS = ['C', 'C#/Db', 'D', 'D#/Eb', 'E', 'F', 'F#/Gb', 'G', 'G#/Ab', 'A', 'A#/Bb', 'B'];
+const TYPE_GROUPS = [...new Set(CHORD_TYPES.map((t) => t.group))];
 const COL_GAP = 110;
 const STAFF_SCALE = 1.15;
 
 /**
  * @param {{synth, pretty:(s:string)=>string, toast:(s:string)=>void, activeNotes:()=>number[],
- *   refresh:()=>void, onRangeChange:()=>void, isActive:()=>boolean}} ctx
+ *   refresh:()=>void, onRangeChange:()=>void, selectedIds:()=>string[]}} ctx
  */
 export function createProgressionView(ctx) {
   const { synth, pretty, toast } = ctx;
@@ -54,8 +55,6 @@ export function createProgressionView(ctx) {
   $('#progPreset').replaceChildren(...PRESETS.map((p) => new Option(p.name, p.id)));
   $('#progPreset').addEventListener('change', fillKeySelect);
   fillKeySelect();
-  $('#progRoot').replaceChildren(...ROOT_LABELS.map((n, pc) => new Option(pretty(n), pc)));
-  $('#progType').replaceChildren(...CHORD_TYPES.map((t) => new Option(`${t.name} (${t.symbol || 'M'})`, t.id)));
 
   $('#progUsePreset').addEventListener('click', () => {
     stopAll();
@@ -64,15 +63,24 @@ export function createProgressionView(ctx) {
     recompute();
     toast(`Đã tạo vòng: ${data.items.map((i) => pretty(itemLabel(i))).join(' → ')}`);
   });
-  $('#progAdd').addEventListener('click', () => {
+  /** Insert a chord into the progression (at the end by default) and select it. */
+  function insertItem(item, at = data.items.length) {
     stopAll();
-    const pc = Number($('#progRoot').value);
-    const typeId = $('#progType').value;
-    data.items.push({ pc, typeId, rootName: rootNameFor(pc, typeId), inversion: 'auto' });
-    v.index = data.items.length - 1;
+    data.items.splice(at, 0, { ...item, inversion: 'auto' });
+    v.index = at;
     recompute();
     synth.playChord(cur().midis, { duration: 1 });
-  });
+  }
+
+  function reorder(from, to) {
+    if (from === to) return;
+    stopAll();
+    const selected = data.items[v.index];
+    moveItem(data.items, from, to);
+    v.index = data.items.indexOf(selected);
+    if (v.index < 0) v.index = to;
+    recompute();
+  }
   $('#progClear').addEventListener('click', () => {
     if (data.items.length && !confirm('Xóa toàn bộ hợp âm trong vòng?')) return;
     stopAll();
@@ -86,18 +94,19 @@ export function createProgressionView(ctx) {
     recompute();
   });
 
+  // ------------------------------------------------------------ sequence list (drag & drop)
   $('#progList').addEventListener('click', (e) => {
     const btn = e.target.closest('button');
     if (!btn) return;
     const i = Number(btn.closest('li').dataset.index);
-    const act = btn.dataset.act;
-    if (act === 'select') return select(i, true);
-    stopAll();
-    if (act === 'up' && i > 0) [data.items[i - 1], data.items[i]] = [data.items[i], data.items[i - 1]];
-    if (act === 'down' && i < data.items.length - 1) [data.items[i + 1], data.items[i]] = [data.items[i], data.items[i + 1]];
-    if (act === 'del') data.items.splice(i, 1);
-    if (act === 'up' || act === 'down') v.index = act === 'up' ? Math.max(0, i - 1) : Math.min(data.items.length - 1, i + 1);
-    recompute();
+    if (btn.dataset.act === 'del') {
+      stopAll();
+      data.items.splice(i, 1);
+      if (v.index > i || v.index >= data.items.length) v.index = Math.max(0, v.index - 1);
+      recompute();
+    }
+    // Mouse/touch selection is handled by the drag controller; this covers keyboard activation.
+    if (btn.dataset.act === 'select' && e.detail === 0) select(i, true);
   });
   $('#progList').addEventListener('change', (e) => {
     const sel = e.target.closest('select');
@@ -107,6 +116,212 @@ export function createProgressionView(ctx) {
     v.index = i;
     recompute();
     synth.playChord(cur().midis, { duration: 1 });
+  });
+  $('#progList').addEventListener('pointerdown', (e) => {
+    const li = e.target.closest('li.seq-item');
+    if (!li || e.target.closest('select, [data-act=del]')) return;
+    // On touch screens only the handle drags, so the page can still scroll.
+    if (e.pointerType === 'touch' && !e.target.closest('.handle')) return;
+    const i = Number(li.dataset.index);
+    const onChord = e.target.closest('[data-act=select]');
+    beginDrag(e, li, { from: i, onClick: () => onChord && select(i, true) });
+  });
+  $('#progList').addEventListener('keydown', (e) => {
+    const handle = e.target.closest('.handle');
+    if (!handle) return;
+    const i = Number(handle.closest('li').dataset.index);
+    const delta = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[e.key];
+    if (!delta) return;
+    e.preventDefault();
+    const to = i + delta;
+    if (to < 0 || to >= data.items.length) return;
+    reorder(i, to);
+    $(`#progList li[data-index="${to}"] .handle`)?.focus();
+  });
+
+  /**
+   * Pointer-based drag (works for mouse, pen and touch). A press without movement counts as a click.
+   * payload: {from?: index in list, item?: chord to insert, onClick?: fn}
+   */
+  function beginDrag(e, el, payload) {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (v.running) return payload.onClick?.();
+    const sx = e.clientX;
+    const sy = e.clientY;
+    const rect = el.getBoundingClientRect();
+    const offX = sx - rect.left;
+    const offY = sy - rect.top;
+    let dragging = false;
+    let ghost = null;
+    let insertAt = null;
+    const list = $('#progList');
+
+    const onMove = (ev) => {
+      if (!dragging) {
+        if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 6) return;
+        dragging = true;
+        ghost = el.cloneNode(true);
+        ghost.classList.add('drag-ghost');
+        ghost.style.width = `${rect.width}px`;
+        document.body.appendChild(ghost);
+        if (payload.from != null) el.classList.add('dragging');
+        document.body.classList.add('is-dragging');
+      }
+      ev.preventDefault();
+      ghost.style.transform = `translate(${ev.clientX - offX}px, ${ev.clientY - offY}px)`;
+      insertAt = dropIndex(list, ev.clientX, ev.clientY, payload.from);
+      showMarker(list, insertAt, payload.from);
+      autoScroll(ev.clientY);
+    };
+    const cleanup = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', cleanup);
+      ghost?.remove();
+      el.classList.remove('dragging');
+      document.body.classList.remove('is-dragging');
+      list.querySelector('.seq-marker')?.remove();
+      list.classList.remove('drop-target');
+    };
+    const onUp = () => {
+      cleanup();
+      if (!dragging) return payload.onClick?.();
+      if (insertAt == null) return;
+      if (payload.from != null) reorder(payload.from, insertAt);
+      else insertItem(payload.item, insertAt);
+    };
+    window.addEventListener('pointermove', onMove, { passive: false });
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', cleanup);
+  }
+
+  /** Where a drop at (x, y) lands in the list, or null when outside it. Items flow left-to-right, then wrap. */
+  function dropIndex(list, x, y, from) {
+    const box = list.getBoundingClientRect();
+    const pad = 24;
+    if (x < box.left - pad || x > box.right + pad || y < box.top - pad || y > box.bottom + pad) return null;
+    const others = [...list.querySelectorAll('li.seq-item')].filter((li) => Number(li.dataset.index) !== from);
+    for (let i = 0; i < others.length; i++) {
+      const r = others[i].getBoundingClientRect();
+      if (y < r.top || (y < r.bottom && x < r.left + r.width / 2)) return i;
+    }
+    return others.length;
+  }
+
+  function showMarker(list, at, from) {
+    list.classList.toggle('drop-target', at != null);
+    let marker = list.querySelector('.seq-marker');
+    if (at == null) return marker?.remove();
+    if (!marker) {
+      marker = document.createElement('li');
+      marker.className = 'seq-marker';
+      marker.setAttribute('aria-hidden', 'true');
+    }
+    const others = [...list.querySelectorAll('li.seq-item')].filter((li) => Number(li.dataset.index) !== from);
+    const before = others[at] ?? null;
+    if (before) list.insertBefore(marker, before);
+    else list.appendChild(marker);
+  }
+
+  function autoScroll(y) {
+    const dockTop = document.querySelector('.dock')?.getBoundingClientRect().top ?? window.innerHeight;
+    if (y < 70) window.scrollBy(0, -12);
+    else if (y > dockTop - 40) window.scrollBy(0, 12);
+  }
+
+  // ------------------------------------------------------------ chord palette
+  const pal = { tab: 'key', key: 'major:0', root: 0, ...load('progPalette', {}) };
+  let palItems = [];
+
+  $$('#palTabs button').forEach((b) =>
+    b.addEventListener('click', () => {
+      pal.tab = b.dataset.pal;
+      save('progPalette', pal);
+      renderPalette();
+    }),
+  );
+
+  function renderPalette() {
+    $$('#palTabs button').forEach((b) => b.classList.toggle('active', b.dataset.pal === pal.tab));
+    const filter = $('#palFilter');
+    let groups = [];
+    if (pal.tab === 'key') {
+      const opts = ['major', 'minor'].flatMap((mode) =>
+        (mode === 'minor' ? MINOR_KEYS : MAJOR_KEYS).map(
+          (n, pc) => `<option value="${mode}:${pc}"${pal.key === `${mode}:${pc}` ? ' selected' : ''}>${pretty(n)} ${mode === 'minor' ? 'thứ' : 'trưởng'}</option>`,
+        ),
+      );
+      filter.innerHTML = `<label class="inline">Giọng <select id="palKey">${opts.join('')}</select></label>`;
+      $('#palKey').addEventListener('change', (e) => {
+        pal.key = e.target.value;
+        save('progPalette', pal);
+        renderPalette();
+      });
+      const [mode, pc] = pal.key.split(':');
+      groups = keyPalette(mode, Number(pc)).map((g) => ({ title: g.title, chords: g.chords.map((c) => ({ item: c.item, sub: c.roman })) }));
+    } else if (pal.tab === 'selected') {
+      const ids = ctx.selectedIds();
+      filter.innerHTML = `<span class="muted small">${ids.length ? `${ids.length} hợp âm bạn đã chọn ở tab ① Chọn hợp âm.` : 'Bạn chưa chọn hợp âm nào ở tab ① Chọn hợp âm.'}</span>`;
+      groups = TYPE_GROUPS.map((title) => ({
+        title,
+        chords: ids
+          .map((id) => {
+            const [pc, typeId] = id.split(':');
+            return { pc: Number(pc), typeId };
+          })
+          .filter((c) => TYPE_BY_ID[c.typeId].group === title)
+          .map((c) => ({ item: { ...c, rootName: rootNameFor(c.pc, c.typeId) }, sub: TYPE_BY_ID[c.typeId].name })),
+      }));
+    } else {
+      filter.innerHTML = `<div class="root-pick" role="group" aria-label="Nốt gốc">${ROOT_LABELS.map(
+        (n, pc) => `<button data-root="${pc}" class="${pal.root === pc ? 'active' : ''}">${pretty(n)}</button>`,
+      ).join('')}</div>`;
+      filter.querySelectorAll('[data-root]').forEach((b) =>
+        b.addEventListener('click', () => {
+          pal.root = Number(b.dataset.root);
+          save('progPalette', pal);
+          renderPalette();
+        }),
+      );
+      groups = TYPE_GROUPS.map((title) => ({
+        title,
+        chords: CHORD_TYPES.filter((t) => t.group === title).map((t) => ({
+          item: { pc: pal.root, typeId: t.id, rootName: rootNameFor(pal.root, t.id) },
+          sub: t.name,
+        })),
+      }));
+    }
+    palItems = [];
+    $('#palette').innerHTML = groups
+      .filter((g) => g.chords.length)
+      .map(
+        (g) => `<div class="pal-group"><div class="pal-title">${g.title}</div><div class="pal-chips">${g.chords
+          .map((c) => {
+            const i = palItems.push(c.item) - 1;
+            const label = pretty(itemLabel(c.item));
+            return `<button class="pal-chip" data-pi="${i}" title="Bấm để thêm ${label} vào cuối vòng, hoặc kéo vào vị trí mong muốn"><b>${label}</b><small>${pretty(c.sub)}</small></button>`;
+          })
+          .join('')}</div></div>`,
+      )
+      .join('') || '<p class="muted small">Không có hợp âm nào.</p>';
+  }
+
+  $('#palette').addEventListener('pointerdown', (e) => {
+    const chip = e.target.closest('.pal-chip');
+    if (!chip) return;
+    const item = palItems[Number(chip.dataset.pi)];
+    const add = () => insertItem(item);
+    // Touch: tap to add (dragging from the palette would block page scrolling).
+    if (e.pointerType === 'touch') {
+      chip.addEventListener('pointerup', add, { once: true });
+      chip.addEventListener('pointercancel', () => chip.removeEventListener('pointerup', add), { once: true });
+      return;
+    }
+    beginDrag(e, chip, { item, onClick: add });
+  });
+  $('#palette').addEventListener('click', (e) => {
+    const chip = e.target.closest('.pal-chip');
+    if (chip && e.detail === 0) insertItem(palItems[Number(chip.dataset.pi)]); // keyboard
   });
 
   function renderSaved() {
@@ -194,22 +409,24 @@ export function createProgressionView(ctx) {
 
   function renderList() {
     const list = $('#progList');
+    $('#progSeqCount').textContent = data.items.length ? `(${data.items.length} hợp âm)` : '';
     if (!data.items.length) {
-      list.innerHTML = '<li class="empty">Vòng đang trống — chọn mẫu hoặc thêm hợp âm.</li>';
+      list.innerHTML = '<li class="seq-empty">Vòng đang trống — bấm hoặc kéo hợp âm từ <b>Bảng hợp âm</b> vào đây, hoặc chọn một vòng mẫu.</li>';
       return;
     }
     list.innerHTML = data.items
       .map((item, i) => {
         const step = v.steps[i];
         const max = maxInversion(item.typeId);
-        const opts = [`<option value="auto"${item.inversion === 'auto' ? ' selected' : ''}>Tự động · ${INVERSION_NAMES[step.inversion]}</option>`];
+        const opts = [`<option value="auto"${item.inversion === 'auto' ? ' selected' : ''}>Tự động (${INVERSION_NAMES[step.inversion].toLowerCase()})</option>`];
         for (let k = 0; k <= max; k++) opts.push(`<option value="${k}"${item.inversion === k ? ' selected' : ''}>${INVERSION_NAMES[k]}</option>`);
-        return `<li data-index="${i}" class="${i === v.index ? 'current' : ''}">
-          <button class="prog-chord" data-act="select" title="Chọn hợp âm này">${pretty(step.label)}</button>
-          <select aria-label="Thế bấm">${opts.join('')}</select>
-          <button class="mini" data-act="up" title="Lên" aria-label="Chuyển lên">↑</button>
-          <button class="mini" data-act="down" title="Xuống" aria-label="Chuyển xuống">↓</button>
-          <button class="mini" data-act="del" title="Xóa" aria-label="Xóa">✕</button>
+        const label = pretty(step.label);
+        return `<li data-index="${i}" class="seq-item${i === v.index ? ' current' : ''}">
+          <span class="handle" tabindex="0" role="button" aria-label="Kéo để đổi vị trí ${label}; hoặc dùng phím mũi tên" title="Kéo để sắp xếp">⠿</span>
+          <span class="seq-num">${i + 1}</span>
+          <button class="seq-chord" data-act="select" title="Chọn hợp âm này">${label}</button>
+          <select class="seq-inv" aria-label="Thế bấm của ${label}">${opts.join('')}</select>
+          <button class="mini" data-act="del" title="Xóa" aria-label="Xóa ${label}">✕</button>
         </li>`;
       })
       .join('');
@@ -253,7 +470,7 @@ export function createProgressionView(ctx) {
 
   function renderCurrent() {
     const step = cur();
-    $$('#progList li').forEach((li) => li.classList.toggle('current', Number(li.dataset.index) === v.index));
+    $$('#progList li.seq-item').forEach((li) => li.classList.toggle('current', Number(li.dataset.index) === v.index));
     const disabled = !step;
     ['#progStart', '#progListen', '#progPrev', '#progNext'].forEach((s) => ($(s).disabled = disabled || (v.running && s !== '#progStart')));
     $('#progStart').hidden = v.running;
@@ -619,6 +836,7 @@ export function createProgressionView(ctx) {
 
   // ------------------------------------------------------------ init
   renderSaved();
+  renderPalette();
   setMode('step');
   recompute();
 
@@ -629,6 +847,7 @@ export function createProgressionView(ctx) {
     stop: stopAll,
     current: () => cur(),
     render: () => {
+      renderPalette();
       renderSheet();
       renderCurrent();
     },

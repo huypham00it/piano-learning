@@ -934,6 +934,7 @@ progView = createProgressionView({
   activeNotes,
   refresh: () => progView && state.tab === 'prog' && notesChanged('prog'),
   onRangeChange: () => progView && fitPianoRange(),
+  selectedIds: () => sortedSelection(),
 });
 
 // ---------------------------------------------------------------- init

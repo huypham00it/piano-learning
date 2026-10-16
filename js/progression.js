@@ -257,3 +257,42 @@ export function positionText(step) {
   return { rh, lh };
 }
 
+
+// ---------------------------------------------------------------- chord palette by key
+
+// [degree index, semitones above tonic, chord type, roman numeral]
+const KEY_PALETTE = {
+  major: [
+    { title: 'Hợp âm 3 nốt', steps: [[0, 0, 'maj', 'I'], [1, 2, 'min', 'ii'], [2, 4, 'min', 'iii'], [3, 5, 'maj', 'IV'], [4, 7, 'maj', 'V'], [5, 9, 'min', 'vi'], [6, 11, 'dim', 'vii°']] },
+    { title: 'Hợp âm 7', steps: [[0, 0, 'maj7', 'Imaj7'], [1, 2, 'm7', 'ii7'], [2, 4, 'm7', 'iii7'], [3, 5, 'maj7', 'IVmaj7'], [4, 7, '7', 'V7'], [5, 9, 'm7', 'vi7'], [6, 11, 'm7b5', 'viiø7']] },
+    { title: 'Thường gặp khác', steps: [[4, 7, 'sus4', 'Vsus4'], [0, 0, 'sus2', 'Isus2'], [1, 2, '7', 'II7'], [2, 4, '7', 'III7'], [5, 9, '7', 'VI7'], [3, 5, 'min', 'iv'], [6, 10, 'maj', '♭VII'], [5, 8, 'maj', '♭VI'], [0, 0, '7', 'I7']] },
+  ],
+  minor: [
+    { title: 'Hợp âm 3 nốt', steps: [[0, 0, 'min', 'i'], [1, 2, 'dim', 'ii°'], [2, 3, 'maj', 'III'], [3, 5, 'min', 'iv'], [4, 7, 'min', 'v'], [5, 8, 'maj', 'VI'], [6, 10, 'maj', 'VII']] },
+    { title: 'Hợp âm 7', steps: [[0, 0, 'm7', 'i7'], [1, 2, 'm7b5', 'iiø7'], [2, 3, 'maj7', 'IIImaj7'], [3, 5, 'm7', 'iv7'], [4, 7, 'm7', 'v7'], [5, 8, 'maj7', 'VImaj7'], [6, 10, '7', 'VII7']] },
+    { title: 'Thường gặp khác', steps: [[4, 7, 'maj', 'V'], [4, 7, '7', 'V7'], [6, 11, 'dim7', 'vii°7'], [3, 5, 'maj', 'IV'], [0, 0, 'mMaj7', 'i(maj7)'], [1, 1, 'maj', '♭II']] },
+  ],
+};
+
+/**
+ * Chords that belong to (or are common in) a key, grouped, with roman numerals.
+ * @param {'major'|'minor'} mode
+ * @returns {Array<{title:string, chords:Array<{roman:string, item:object}>}>}
+ */
+export function keyPalette(mode, keyPc) {
+  const tonic = (mode === 'minor' ? MINOR_KEYS : MAJOR_KEYS)[mod12(keyPc)];
+  return KEY_PALETTE[mode].map((g) => ({
+    title: g.title,
+    chords: g.steps.map(([deg, semis, typeId, roman]) => {
+      const rootName = spellDegree(tonic, deg, semis);
+      return { roman, item: { pc: parseNoteName(rootName).pc, typeId, rootName, inversion: 'auto' } };
+    }),
+  }));
+}
+
+/** Move an element of `arr` from index `from` to index `to` (in place); returns the array. */
+export function moveItem(arr, from, to) {
+  const [x] = arr.splice(from, 1);
+  arr.splice(Math.max(0, Math.min(to, arr.length)), 0, x);
+  return arr;
+}
