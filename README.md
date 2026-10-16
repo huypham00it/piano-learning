@@ -19,6 +19,10 @@ Webapp giúp ghi nhớ hợp âm piano. Kết nối đàn với máy tính qua *
   - Tự chọn thế bấm **dẫn giọng mượt** (tay di chuyển ít nhất, giữ nốt chung), có thể chỉnh thế bấm từng hợp âm; tay trái chơi nốt gốc hoặc quãng 8.
   - **Chỉ dẫn ngón tay**: số ngón (1 = ngón cái … 5 = ngón út) hiện trên phím đàn (xanh = tay phải, cam = tay trái) và trên khuông nhạc; phím viền vàng báo trước hợp âm kế tiếp; hướng dẫn từng bước chuyển hợp âm (“Giữ nguyên phím G bằng ngón 5”, “Ngón 1: C → B (xuống nửa cung)”, “Tay trái: C → G”…).
   - 3 chế độ: xem từng bước, luyện chờ chơi đúng (đo thời gian từng lần chuyển hợp âm, chỉ ra bước chuyển chậm/sai), luyện theo nhịp với máy đếm nhịp (BPM, số phách mỗi hợp âm, đếm vào 1 ô nhịp). Có thể kiểm tra đúng thế bấm và tay trái.
+- **Bài hát** (tab ⑤): tập bài hát kiểu người mới — **tay phải đánh giai điệu từng nốt, tay trái đánh nốt gốc của hợp âm** (với hợp âm có dấu “/”, ví dụ Am/C, tay trái đánh nốt sau dấu “/”).
+  - Bản nhạc khuông kép cuộn ngang: giai điệu, nốt trầm tay trái, tên hợp âm, số ngón tay cho cả hai tay (tự tính theo thế tay 5 ngón), con trỏ theo vị trí đang tập.
+  - Chế độ: **Chờ chơi đúng** (máy chờ bạn bấm đúng từng nốt), **Theo nhịp** (đếm vào 1 ô nhịp, máy đếm nhịp, chấm đúng/lỡ nhịp), **Nghe mẫu**. Chọn tập tay phải, tay trái hoặc hai tay; máy có thể chơi phần của tay còn lại; chọn đoạn “Ô nhịp … đến …”, lặp lại, chỉnh tốc độ. Kết quả chỉ ra các ô nhịp cần tập thêm.
+  - Có sẵn 2 bài mẫu thuộc phạm vi công cộng (Twinkle Twinkle Little Star, Ode to Joy). Thêm bài bằng trình soạn thảo với ký hiệu dạng chữ (có kiểm tra tổng trường độ từng ô nhịp), hoặc **Nhập file** `.txt`; **Xuất file** để sao lưu. Bài hát của bạn chỉ lưu trong trình duyệt, không đưa lên trang web.
 - **Lặp lại ngắt quãng (Leitner)**: mỗi hợp âm có "mức nhớ" 1–5; hợp âm hay sai hoặc chơi chậm sẽ xuất hiện thường xuyên hơn. Tab **Thống kê** cho thấy độ chính xác, thời gian trung bình và cho phép luyện riêng các hợp âm yếu.
 - Thanh dưới cùng luôn hiển thị các nốt đang bấm, tên hợp âm nhận diện được và khuông nhạc nhỏ.
 - Dữ liệu (hợp âm đã chọn, thiết lập, thống kê) được lưu trong trình duyệt (localStorage).
@@ -49,7 +53,7 @@ Workflow `.github/workflows/static.yml` triển khai trang khi push lên nhánh 
 npm test
 ```
 
-Các test kiểm tra ký âm hợp âm, thế đảo, nhận diện và chấm điểm (`tests/theory.test.js`), cũng như vòng hợp âm: tên hợp âm theo giọng, số ngón tay, dẫn giọng, chấm thế bấm và hướng dẫn chuyển hợp âm (`tests/progression.test.js`).
+Các test kiểm tra ký âm hợp âm, thế đảo, nhận diện và chấm điểm (`tests/theory.test.js`), cũng như vòng hợp âm: tên hợp âm theo giọng, số ngón tay, dẫn giọng, chấm thế bấm và hướng dẫn chuyển hợp âm (`tests/progression.test.js`); bài hát: hợp âm, hóa biểu, trường độ, dấu nối, nốt trầm, số ngón tay (`tests/song.test.js`).
 
 ## Cấu trúc
 
@@ -60,6 +64,10 @@ js/theory.js      Lý thuyết nhạc: ký âm, dựng hợp âm, thế đảo, 
 js/practice.js    Bộ máy bài tập: chọn câu hỏi theo trọng số, đáp án nhiễu, thống kê
 js/progression.js Vòng hợp âm: vòng mẫu, dẫn giọng, số ngón tay, chấm điểm, hướng dẫn chuyển hợp âm
 js/progressionView.js Giao diện tab Vòng hợp âm (xem từng bước, luyện chờ đúng, luyện theo nhịp)
+js/song.js        Bài hát: đọc ký hiệu dạng chữ, kiểm tra trường độ, nốt trầm tay trái, số ngón tay, chuỗi phím cần bấm
+js/scoreView.js   Vẽ bản nhạc bài hát (khuông kép cuộn ngang)
+js/songView.js    Giao diện tab Bài hát (thư viện, soạn thảo, chờ chơi đúng / theo nhịp / nghe mẫu)
+js/demoSongs.js   Bài mẫu thuộc phạm vi công cộng
 js/staff.js       Vẽ khuông nhạc (SVG)
 js/glyphs.js      Hình khóa nhạc và dấu hóa (trích từ font GNU FreeSerif)
 js/keyboard.js    Bàn phím piano trên màn hình

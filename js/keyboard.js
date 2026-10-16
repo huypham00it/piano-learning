@@ -72,6 +72,19 @@ export class PianoKeyboard {
     this.render(this.lastState ?? {});
   }
 
+  /** Scroll the surrounding scroll box (if any) so these keys are visible. */
+  reveal(midis) {
+    const box = this.root.parentElement;
+    if (!midis.length || !box || box.scrollWidth <= box.clientWidth) return;
+    const keys = midis.map((m) => this.keys.get(m)).filter(Boolean);
+    if (!keys.length) return;
+    const left = Math.min(...keys.map((k) => k.offsetLeft));
+    const right = Math.max(...keys.map((k) => k.offsetLeft + k.offsetWidth));
+    const view = [box.scrollLeft, box.scrollLeft + box.clientWidth];
+    if (left >= view[0] + 8 && right <= view[1] - 8) return;
+    box.scrollTo({ left: Math.max(0, (left + right) / 2 - box.clientWidth / 2), behavior: 'smooth' });
+  }
+
   /**
    * @param {{pressed?:Iterable<number>, target?:Iterable<number>, wrong?:Iterable<number>, correct?:Iterable<number>,
    *   next?:Iterable<number>, fingers?:Map<number,{finger:number, hand:'L'|'R'}>, labels?:Map<number,string>}} state

@@ -15,7 +15,7 @@ const HEIGHT = 262;
 const CLEF_X = 8;
 const FIRST_COL_X = 92;
 
-function el(name, attrs = {}, parent) {
+export function el(name, attrs = {}, parent) {
   const node = document.createElementNS(NS, name);
   for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
   if (parent) parent.appendChild(node);
@@ -27,12 +27,12 @@ const stepY = (step, clef) =>
     ? TREBLE_BOTTOM_Y - (step - TREBLE_BOTTOM_STEP) * HALF
     : BASS_BOTTOM_Y - (step - BASS_BOTTOM_STEP) * HALF;
 
-function glyph(parent, name, x, y, scale, fill) {
+export function glyph(parent, name, x, y, scale, fill) {
   return el('path', { d: GLYPHS[name], transform: `translate(${x} ${y}) scale(${scale} ${-scale})`, fill }, parent);
 }
 
 // Vertical offset (font units) of each accidental's visual anchor from its origin.
-const ACC = {
+export const ACC = {
   2: { name: 'dsharp', scale: 0.026, anchor: 180, width: 10 },
   1: { name: 'sharp', scale: 0.029, anchor: 198, width: 9.5 },
   0: { name: 'natural', scale: 0.029, anchor: 192, width: 8 },

@@ -34,7 +34,8 @@
     <button role="tab" data-tab="learn" class="tab">② Học</button>
     <button role="tab" data-tab="practice" class="tab">③ Luyện tập</button>
     <button role="tab" data-tab="prog" class="tab">④ Vòng hợp âm</button>
-    <button role="tab" data-tab="stats" class="tab">⑤ Thống kê</button>
+    <button role="tab" data-tab="song" class="tab">⑤ Bài hát</button>
+    <button role="tab" data-tab="stats" class="tab">⑥ Thống kê</button>
   </nav>
 
   <main>
@@ -324,6 +325,100 @@
       </div>
 
       <div id="progSummary" class="card prog-summary" hidden></div>
+    </section>
+
+    <!-- SONGS -->
+    <section id="tab-song" class="panel" role="tabpanel">
+      <div class="song-layout">
+        <aside class="card song-lib">
+          <h3>Thư viện bài hát</h3>
+          <ul id="songList" class="song-list"></ul>
+          <div class="btn-row">
+            <button class="btn btn-small" id="songNew">+ Bài mới</button>
+            <label class="btn btn-small file-btn" title="Nhập file .txt chứa một hoặc nhiều bài hát">⇪ Nhập file<input type="file" id="songImport" accept=".txt,.json,text/plain,application/json" hidden /></label>
+            <button class="btn btn-small" id="songExport" title="Tải tất cả bài hát về máy (file .txt)">⇩ Xuất file</button>
+          </div>
+          <p class="muted small">Bài hát được lưu trong trình duyệt này. Dùng “Xuất file” để sao lưu hoặc chuyển sang máy khác.</p>
+        </aside>
+
+        <div class="song-main">
+          <div class="card song-practice">
+            <div class="song-head">
+              <div>
+                <h2 id="songTitle">—</h2>
+                <div class="muted small" id="songMeta"></div>
+              </div>
+              <button class="btn btn-small" id="songEdit">✎ Sửa bài</button>
+            </div>
+            <div class="song-controls">
+              <div class="seg" id="songModes" role="group" aria-label="Chế độ">
+                <button data-mode="wait">Chờ chơi đúng</button>
+                <button data-mode="tempo">Theo nhịp</button>
+                <button data-mode="listen">Nghe mẫu</button>
+              </div>
+              <div class="seg" id="songHands" role="group" aria-label="Tay tập">
+                <button data-hands="R">Tay phải</button>
+                <button data-hands="L">Tay trái</button>
+                <button data-hands="both">Hai tay</button>
+              </div>
+              <label class="inline">Tốc độ <input type="range" id="songBpm" min="30" max="160" step="5" /> <b id="songBpmVal"></b> BPM</label>
+              <label class="inline">Ô nhịp <input type="number" id="songFrom" class="num" /> đến <input type="number" id="songTo" class="num" /></label>
+              <label class="inline" id="songAccompWrap" title="Máy tự chơi phần của tay còn lại"><input type="checkbox" id="songAccomp" /> Máy chơi tay còn lại</label>
+              <label class="inline" id="songMetroWrap"><input type="checkbox" id="songMetro" /> Máy đếm nhịp</label>
+              <label class="inline"><input type="checkbox" id="songLoop" /> Lặp lại</label>
+            </div>
+            <div id="songScore" class="song-score" title="Bấm vào một nốt để nhảy tới đó"></div>
+            <div class="hands song-status">
+              <div class="hand hand-r-box"><span class="hand-tag">Tay phải</span><b id="songRH">—</b></div>
+              <div class="hand hand-l-box"><span class="hand-tag">Tay trái (nốt gốc hợp âm)</span><b id="songLH">—</b></div>
+              <div class="hand"><span class="hand-tag">Tiến độ</span><b id="songProgress">—</b></div>
+            </div>
+            <p id="songFeedback" class="feedback info" aria-live="polite"></p>
+            <div class="btn-row center">
+              <button class="btn btn-primary" id="songStart">▶ Bắt đầu</button>
+              <button class="btn danger" id="songStop" hidden>■ Dừng</button>
+              <button class="btn" id="songRestart">⟲ Về đầu đoạn</button>
+            </div>
+          </div>
+
+          <div class="card" id="songSummary" hidden></div>
+
+          <div class="card song-editor" id="songEditor" hidden>
+            <h3 id="songEditorTitle">Sửa bài hát</h3>
+            <textarea id="songText" spellcheck="false" rows="16" aria-label="Nội dung bài hát"></textarea>
+            <div id="songErrors" class="song-errors"></div>
+            <div class="btn-row">
+              <button class="btn btn-primary" id="songSave">Lưu</button>
+              <button class="btn" id="songCheck">Kiểm tra</button>
+              <button class="btn" id="songCancel">Đóng</button>
+              <button class="btn danger" id="songDelete">Xóa bài này</button>
+            </div>
+            <details class="howto">
+              <summary>Cách ghi bài hát</summary>
+              <ul>
+                <li>Dòng đầu: <code>title:</code> tên bài, <code>composer:</code> tác giả, <code>key:</code> giọng (ví dụ <code>C</code>, <code>F</code>, <code>Am</code>, <code>Dm</code>), <code>time:</code> nhịp (<code>2/4</code>, <code>3/4</code>, <code>4/4</code>), <code>tempo:</code> số phách mỗi phút.</li>
+                <li>Nốt = tên nốt + dấu hóa + quãng tám + trường độ: <code>C4q</code> (Đô giữa, nốt đen), <code>F#4e</code> (Fa thăng, móc đơn), <code>Bb3h</code> (Si giáng, nốt trắng). Quãng tám 4 là quãng có Đô giữa.</li>
+                <li>Trường độ: <code>w</code> tròn · <code>h</code> trắng · <code>q</code> đen · <code>e</code> móc đơn · <code>s</code> móc kép. Thêm <code>.</code> cho chấm dôi (<code>E4q.</code>), <code>3</code> cho liên ba (<code>A4e3</code>), <code>~</code> để nối sang nốt sau (<code>D4h~ D4e</code>).</li>
+                <li>Dấu lặng: <code>r</code> + trường độ, ví dụ <code>re</code>, <code>rq</code>.</li>
+                <li>Hợp âm đặt trong ngoặc vuông ngay trước nốt bắt đầu hợp âm: <code>[Am]</code>, <code>[Bbmaj7]</code>, <code>[Am/C]</code> (tay trái chơi nốt sau dấu /).</li>
+                <li><code>|</code> ngăn các ô nhịp; dòng bắt đầu bằng <code>@</code> là tên đoạn (<code>@Điệp khúc</code>); dòng bắt đầu bằng <code>//</code> là ghi chú. Nhiều bài trong một file ngăn nhau bằng dòng <code>===</code>.</li>
+                <li>Với đoạn có hai bè, hãy ghi bè trên (giai điệu) cho tay phải.</li>
+              </ul>
+            </details>
+          </div>
+
+          <details class="card howto">
+            <summary>Lộ trình tập cho người mới</summary>
+            <ol>
+              <li><b>Nghe mẫu</b> vài lần, nhìn phím sáng và số ngón tay.</li>
+              <li><b>Tay phải + Chờ chơi đúng</b>: máy chờ bạn bấm đúng từng nốt (bật “Máy chơi tay còn lại” để nghe tiếng bass).</li>
+              <li><b>Tay trái + Chờ chơi đúng</b>: chỉ bấm nốt gốc khi hợp âm đổi, máy chơi giai điệu.</li>
+              <li><b>Hai tay + Chờ chơi đúng</b>, tập từng đoạn ngắn (chọn “Ô nhịp … đến …”).</li>
+              <li><b>Theo nhịp</b> ở tốc độ chậm (40–50 BPM), tăng dần 5 BPM mỗi khi đạt trên 90%.</li>
+            </ol>
+          </details>
+        </div>
+      </div>
     </section>
 
     <!-- STATS -->

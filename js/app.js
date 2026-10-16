@@ -9,6 +9,7 @@ import { Synth } from './audio.js';
 import { load, save } from './storage.js';
 import { MODES, MAX_BOX, nextQuestion, recordResult, emptyStat } from './practice.js';
 import { createProgressionView } from './progressionView.js';
+import { createSongView } from './songView.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -31,6 +32,7 @@ const state = {
 const synth = new Synth();
 const midi = new MidiInput();
 let progView = null; // created once the rest of the UI is ready
+let songView = null;
 
 const activeNotes = () => [...new Set([...state.held, ...state.latched])].sort((a, b) => a - b);
 
@@ -69,7 +71,7 @@ function fitPianoRange() {
   const w = window.innerWidth;
   let [lo, hi] = w >= 1100 ? [36, 96] : w >= 700 ? [48, 84] : [55, 84];
   // Progressions may use a left-hand bass below the default range: widen (the piano scrolls if needed).
-  const r = state.tab === 'prog' ? progView?.noteRange() : null;
+  const r = state.tab === 'prog' ? progView?.noteRange() : state.tab === 'song' ? songView?.noteRange() : null;
   if (r) {
     lo = Math.min(lo, r.lo - mod12(r.lo));
     hi = Math.max(hi, r.hi + 11 - mod12(r.hi));
@@ -80,6 +82,18 @@ window.addEventListener('resize', fitPianoRange);
 fitPianoRange();
 
 function onScreenPress(m) {
+  if (state.tab === 'song') {
+    // Songs need key strikes, not latched chords: a tap is a short press.
+    if (state.prefs.sound) synth.noteOn(m, 90, 0, 0.6);
+    state.held.add(m);
+    songView?.onNoteOn(m);
+    notesChanged('tap');
+    setTimeout(() => {
+      state.held.delete(m);
+      notesChanged('tap');
+    }, 220);
+    return;
+  }
   if (state.latched.has(m)) {
     state.latched.delete(m);
     synth.noteOff(m);
@@ -94,6 +108,7 @@ function noteOn(m, velocity = 90, source = 'kb') {
   state.held.add(m);
   const echo = source === 'midi' ? state.prefs.midiEcho : state.prefs.sound;
   if (echo) synth.noteOn(m, velocity);
+  if (state.tab === 'song') songView?.onNoteOn(m);
   notesChanged(source);
 }
 
@@ -114,6 +129,7 @@ function contextChord() {
   if (state.tab === 'practice' && practice.q) return practice.q.chord;
   if (state.tab === 'learn') return learn.chord;
   if (state.tab === 'prog') return progView?.current()?.chord ?? null;
+  if (state.tab === 'song') return songView?.spellContext() ?? null;
   return null;
 }
 
@@ -160,6 +176,12 @@ function renderPiano() {
   piano.showLabels = state.prefs.labels;
   piano.labelFor = (m) => pretty(spellPlayed(m, chord).name);
   if (state.tab === 'prog' && progView) return piano.render(progView.pianoState(pressed));
+  if (state.tab === 'song' && songView) {
+    const view = songView.pianoState(pressed);
+    piano.render(view);
+    piano.reveal([...view.target, ...view.next]);
+    return;
+  }
   const view = { pressed, target: [], correct: [], wrong: [] };
   let showTarget = false;
   let judge = false;
@@ -302,9 +324,11 @@ bindToggle('#labelToggle', 'labels', renderPiano);
 function setTab(tab) {
   if (state.tab === 'practice' && tab !== 'practice') practice.pauseTimer();
   if (state.tab === 'prog' && tab !== 'prog') progView.stop();
+  if (state.tab === 'song' && tab !== 'song') songView.stop();
   state.tab = tab;
   fitPianoRange();
   if (tab === 'prog') progView.render();
+  if (tab === 'song') songView.render();
   $$('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
   $$('.panel').forEach((p) => p.classList.toggle('active', p.id === `tab-${tab}`));
   if (tab === 'learn') learn.render();
@@ -935,6 +959,15 @@ progView = createProgressionView({
   refresh: () => progView && state.tab === 'prog' && notesChanged('prog'),
   onRangeChange: () => progView && fitPianoRange(),
   selectedIds: () => sortedSelection(),
+});
+
+// ---------------------------------------------------------------- songs
+songView = createSongView({
+  synth,
+  pretty,
+  toast,
+  refresh: () => songView && state.tab === 'song' && notesChanged('song'),
+  onRangeChange: () => songView && fitPianoRange(),
 });
 
 // ---------------------------------------------------------------- init
