@@ -41,7 +41,7 @@ Mở <http://localhost:5173>.
 
 ## Triển khai lên GitHub Pages
 
-Workflow `.github/workflows/pages.yml` chạy test rồi triển khai khi push lên nhánh `main`. Cần bật **Settings → Pages → Source: GitHub Actions** cho repository.
+Workflow `.github/workflows/static.yml` triển khai trang khi push lên nhánh `main` (workflow này không chạy test — hãy chạy `npm test` trước khi push). Cần bật **Settings → Pages → Source: GitHub Actions** cho repository.
 
 ## Kiểm thử
 
