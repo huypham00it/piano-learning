@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Luyện Hợp Âm Piano</title>
+  <meta name="description" content="Luyện ghi nhớ hợp âm piano: kết nối đàn qua cáp MIDI, chọn hợp âm cần học, làm bài tập với bàn phím và khuông nhạc." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%234f46e5'/%3E%3Crect x='5' y='7' width='6' height='18' rx='1' fill='%23fff'/%3E%3Crect x='13' y='7' width='6' height='18' rx='1' fill='%23fff'/%3E%3Crect x='21' y='7' width='6' height='18' rx='1' fill='%23fff'/%3E%3Crect x='9' y='7' width='4' height='11' rx='1' fill='%23111'/%3E%3Crect x='19' y='7' width='4' height='11' rx='1' fill='%23111'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">🎹</span>
+      <h1>Luyện Hợp Âm Piano</h1>
+    </div>
+    <div class="midi-box">
+      <span id="midiStatus" class="pill pill-off" title="Trạng thái MIDI">MIDI: chưa kết nối</span>
+      <button id="midiConnect" class="btn btn-small">Kết nối MIDI</button>
+      <select id="midiDevice" class="select-small" hidden aria-label="Thiết bị MIDI"></select>
+    </div>
+    <div class="top-tools">
+      <label class="toggle" title="Phát âm thanh khi bấm phím (tắt nếu đàn của bạn đã có tiếng)">
+        <input type="checkbox" id="soundToggle" /> <span>Âm thanh</span>
+      </label>
+      <label class="toggle" title="Hiện tên nốt trên phím">
+        <input type="checkbox" id="labelToggle" /> <span>Tên nốt</span>
+      </label>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="select" class="tab active">① Chọn hợp âm</button>
+    <button role="tab" data-tab="learn" class="tab">② Học</button>
+    <button role="tab" data-tab="practice" class="tab">③ Luyện tập</button>
+    <button role="tab" data-tab="stats" class="tab">④ Thống kê</button>
+  </nav>
+
+  <main>
+    <!-- SELECT -->
+    <section id="tab-select" class="panel active" role="tabpanel">
+      <div class="panel-head">
+        <div>
+          <h2>Chọn các hợp âm muốn học</h2>
+          <p class="muted">Bấm vào ô để chọn/bỏ. Bấm tên hàng hoặc cột để chọn cả hàng/cột. Đã chọn: <b id="selCount">0</b> hợp âm.</p>
+        </div>
+        <div class="presets">
+          <button class="btn btn-ghost" data-preset="basic">C, F, G, Am, Dm, Em</button>
+          <button class="btn btn-ghost" data-preset="majors">Tất cả trưởng</button>
+          <button class="btn btn-ghost" data-preset="minors">Tất cả thứ</button>
+          <button class="btn btn-ghost" data-preset="triads">Mọi hợp âm 3 nốt cơ bản</button>
+          <button class="btn btn-ghost" data-preset="sevenths">Hợp âm 7 (7, maj7, m7)</button>
+          <span class="preset-key">
+            <select id="keySelect" class="select-small" aria-label="Giọng"></select>
+            <button class="btn btn-ghost" data-preset="key">Hợp âm trong giọng</button>
+            <button class="btn btn-ghost" data-preset="key7">Hợp âm 7 trong giọng</button>
+          </span>
+          <button class="btn btn-ghost danger" data-preset="none">Bỏ chọn hết</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="chordGrid" class="chord-grid"></table>
+      </div>
+      <div class="cta-row">
+        <button class="btn btn-primary" data-goto="learn">Học các hợp âm đã chọn →</button>
+        <button class="btn btn-primary" data-goto="practice">Bắt đầu luyện tập →</button>
+      </div>
+    </section>
+
+    <!-- LEARN -->
+    <section id="tab-learn" class="panel" role="tabpanel">
+      <div class="learn-layout">
+        <aside class="learn-list card">
+          <h3>Hợp âm đã chọn</h3>
+          <div id="learnList" class="chip-list"></div>
+        </aside>
+        <div class="learn-main card">
+          <div class="learn-head">
+            <button class="btn btn-icon" id="learnPrev" aria-label="Hợp âm trước">‹</button>
+            <div class="learn-title">
+              <div id="learnSymbol" class="big-symbol">—</div>
+              <div id="learnName" class="muted"></div>
+            </div>
+            <button class="btn btn-icon" id="learnNext" aria-label="Hợp âm tiếp">›</button>
+          </div>
+          <div class="seg" id="learnInv" role="group" aria-label="Thế bấm"></div>
+          <div id="learnStaff" class="staff-box"></div>
+          <dl class="facts">
+            <div><dt>Các nốt</dt><dd id="learnNotes">—</dd></div>
+            <div><dt>Công thức</dt><dd id="learnFormula">—</dd></div>
+            <div><dt>Nốt trầm</dt><dd id="learnBass">—</dd></div>
+          </dl>
+          <div class="btn-row">
+            <button class="btn" id="learnPlay">▶ Nghe hợp âm</button>
+            <button class="btn" id="learnArp">▶ Nghe rải</button>
+          </div>
+          <p id="learnFeedback" class="feedback">Hãy thử chơi hợp âm này trên đàn — các phím cần bấm được tô màu bên dưới.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- PRACTICE -->
+    <section id="tab-practice" class="panel" role="tabpanel">
+      <div id="practiceSetup" class="card setup">
+        <h2>Thiết lập bài tập</h2>
+        <div class="form-grid">
+          <label>Dạng bài
+            <select id="setMode"></select>
+          </label>
+          <label>Số câu
+            <select id="setCount">
+              <option value="10">10</option>
+              <option value="20" selected>20</option>
+              <option value="30">30</option>
+              <option value="50">50</option>
+              <option value="0">Không giới hạn</option>
+            </select>
+          </label>
+          <label>Thế bấm
+            <select id="setInv">
+              <option value="root">Chỉ thế gốc</option>
+              <option value="all">Thế gốc + các thế đảo</option>
+            </select>
+          </label>
+          <label>Giới hạn thời gian mỗi câu
+            <select id="setTime">
+              <option value="0">Không giới hạn</option>
+              <option value="10">10 giây</option>
+              <option value="6">6 giây</option>
+              <option value="4">4 giây</option>
+              <option value="2.5">2,5 giây</option>
+            </select>
+          </label>
+          <label>Gợi ý sau
+            <select id="setHint">
+              <option value="1">1 lần sai</option>
+              <option value="2" selected>2 lần sai</option>
+              <option value="3">3 lần sai</option>
+              <option value="99">Không gợi ý</option>
+            </select>
+          </label>
+          <label class="check">
+            <input type="checkbox" id="setStrictBass" checked />
+            Kiểm tra đúng nốt trầm (thế đảo)
+          </label>
+        </div>
+        <p class="muted small">
+          Chơi trên đàn MIDI, bấm phím trên bàn phím máy tính (<kbd>A</kbd> <kbd>W</kbd> <kbd>S</kbd> <kbd>E</kbd> <kbd>D</kbd> <kbd>F</kbd> <kbd>T</kbd> <kbd>G</kbd> <kbd>Y</kbd> <kbd>H</kbd> <kbd>U</kbd> <kbd>J</kbd> <kbd>K</kbd>…, đổi quãng tám bằng <kbd>Z</kbd>/<kbd>X</kbd>) hoặc bấm chuột vào phím đàn bên dưới.
+          Hợp âm được chấm tự động khi bạn bấm đủ số nốt. Ứng dụng ưu tiên các hợp âm bạn hay sai hoặc chơi chậm.
+        </p>
+        <p id="poolInfo" class="muted"></p>
+        <button id="startBtn" class="btn btn-primary btn-big">Bắt đầu</button>
+      </div>
+
+      <div id="practiceRun" class="card run" hidden>
+        <div class="run-head">
+          <div class="progress"><div id="progressBar" class="progress-bar"></div></div>
+          <div class="run-stats">
+            <span id="runCounter">Câu 1/20</span>
+            <span>✅ <b id="runCorrect">0</b></span>
+            <span>❌ <b id="runWrong">0</b></span>
+            <span>🔥 <b id="runStreak">0</b></span>
+          </div>
+        </div>
+        <div class="question">
+          <div id="qPrompt" class="q-prompt"></div>
+          <div id="qSymbol" class="big-symbol q-symbol"></div>
+          <div id="qStaff" class="staff-box"></div>
+          <div id="qOptions" class="options"></div>
+          <div class="timer" id="qTimerWrap" hidden><div id="qTimer" class="timer-bar"></div></div>
+          <p id="qFeedback" class="feedback" aria-live="polite"></p>
+        </div>
+        <div class="btn-row">
+          <button class="btn" id="qListen">▶ Nghe</button>
+          <button class="btn" id="qClear" title="Xóa các phím đã bấm bằng chuột">⌫ Xóa phím</button>
+          <button class="btn" id="qReveal">Hiện đáp án</button>
+          <button class="btn" id="qSkip">Bỏ qua →</button>
+          <button class="btn danger" id="qStop">Kết thúc</button>
+        </div>
+      </div>
+
+      <div id="practiceDone" class="card done" hidden>
+        <h2>Kết quả</h2>
+        <div class="summary" id="summary"></div>
+        <div id="summaryList"></div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="againBtn">Luyện tiếp</button>
+          <button class="btn" id="retryWrongBtn">Luyện lại các hợp âm sai</button>
+          <button class="btn" id="setupBtn">Đổi thiết lập</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- STATS -->
+    <section id="tab-stats" class="panel" role="tabpanel">
+      <div class="card">
+        <div class="panel-head">
+          <div>
+            <h2>Thống kê ghi nhớ</h2>
+            <p class="muted">Mức nhớ tăng khi bạn trả lời đúng ngay lần đầu và về 1 khi trả lời sai. Hợp âm mức thấp sẽ xuất hiện thường xuyên hơn.</p>
+          </div>
+          <div class="btn-row">
+            <button class="btn" id="practiceWeak">Chọn các hợp âm yếu để luyện</button>
+            <button class="btn danger" id="resetStats">Xóa thống kê</button>
+          </div>
+        </div>
+        <div class="table-wrap"><table class="stats-table" id="statsTable"></table></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Piano dock -->
+  <footer class="dock">
+    <div class="dock-info">
+      <div>Đang bấm: <b id="playingNotes">—</b></div>
+      <div>Nhận diện: <b id="playingChord">—</b></div>
+      <div class="muted small">Quãng tám bàn phím máy tính: <b id="kbOctave">C4</b></div>
+    </div>
+    <div class="dock-body">
+      <div id="playStaff" class="staff-mini"></div>
+      <div class="piano-scroll"><div id="piano"></div></div>
+    </div>
+  </footer>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
