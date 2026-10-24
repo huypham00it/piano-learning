@@ -39,9 +39,16 @@ python3 -m http.server 5173
 
 Mở <http://localhost:5173>.
 
-> **Lưu ý về MIDI**: Web MIDI chỉ hoạt động trên trang `https://` hoặc `http://localhost`, và được hỗ trợ trên **Chrome, Edge, Opera** (máy tính và Android). Safari/iOS chưa hỗ trợ Web MIDI; Firefox cần cấp quyền khi được hỏi.
+> **Lưu ý về MIDI**: Web MIDI chỉ hoạt động trên trang `https://` hoặc `http://localhost`, và được hỗ trợ trên **Chrome, Edge, Opera** (máy tính và Android). Safari/iOS không hỗ trợ Web MIDI (xem mục *Dùng trên iPad / iPhone*); Firefox cần cấp quyền khi được hỏi.
 >
 > Cách kết nối: cắm cáp USB-MIDI (hoặc cáp USB-B của đàn) vào máy tính → mở ứng dụng → bấm **Kết nối MIDI** → cho phép truy cập thiết bị MIDI.
+
+## Dùng trên iPad / iPhone
+
+- **Cài như một app (không cần App Store):** mở trang web bằng Safari → nút **Chia sẻ** → **Thêm vào Màn hình chính**. App có biểu tượng riêng, mở toàn màn hình và dùng được cả khi không có mạng (PWA: `manifest.webmanifest`, `sw.js`).
+- **Đàn MIDI trên iPad:** Apple không cho Safari (và app thêm vào màn hình chính) dùng Web MIDI. Muốn nối đàn, hãy mở địa chỉ trang web trong một app trình duyệt có Web MIDI, miễn phí trên App Store, ví dụ **Web MIDI Browser** hoặc **MIDIWeb Browser**. Nối đàn bằng cáp USB (iPad cổng USB‑C: cáp/USB‑C hub; iPad cổng Lightning: bộ chuyển *Lightning to USB Camera Adapter*) hoặc Bluetooth MIDI.
+- Phần MIDI của app (`js/midi.js`) dùng dạng API `onmidimessage`/`forEach`, tương thích cả Chrome/Edge lẫn các app trình duyệt Web MIDI trên iPad, và tự nhận đàn cắm vào sau.
+- Mỗi trình duyệt/app lưu dữ liệu riêng (bài hát đã nhập, thống kê): khi chuyển sang app khác, dùng **Xuất file** / **Nhập file** ở tab Bài hát.
 
 ## Triển khai lên GitHub Pages
 
@@ -59,6 +66,7 @@ Các test kiểm tra ký âm hợp âm, thế đảo, nhận diện và chấm �
 
 ```
 index.html        Giao diện chính
+manifest.webmanifest, sw.js, icons/  Cài đặt như app (PWA), chạy không cần mạng
 css/style.css     Giao diện (hỗ trợ chế độ tối, responsive)
 js/theory.js      Lý thuyết nhạc: ký âm, dựng hợp âm, thế đảo, nhận diện
 js/practice.js    Bộ máy bài tập: chọn câu hỏi theo trọng số, đáp án nhiễu, thống kê

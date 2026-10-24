@@ -2,10 +2,18 @@
 <html lang="vi">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#4f46e5" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <!-- iPad / iPhone: "Thêm vào Màn hình chính" opens the app full screen -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Hợp Âm Piano" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <title>Luyện Hợp Âm Piano</title>
   <meta name="description" content="Luyện ghi nhớ hợp âm piano: kết nối đàn qua cáp MIDI, chọn hợp âm cần học, làm bài tập với bàn phím và khuông nhạc." />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%234f46e5'/%3E%3Crect x='5' y='7' width='6' height='18' rx='1' fill='%23fff'/%3E%3Crect x='13' y='7' width='6' height='18' rx='1' fill='%23fff'/%3E%3Crect x='21' y='7' width='6' height='18' rx='1' fill='%23fff'/%3E%3Crect x='9' y='7' width='4' height='11' rx='1' fill='%23111'/%3E%3Crect x='19' y='7' width='4' height='11' rx='1' fill='%23111'/%3E%3C/svg%3E" />
+  <link rel="icon" type="image/png" href="icons/favicon-32.png" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
@@ -452,6 +460,10 @@
     </div>
   </footer>
 
+  <div id="installHint" class="install-hint" hidden>
+    <span>📲 Cài ứng dụng lên iPad: bấm nút <b>Chia sẻ</b> <span aria-hidden="true">⬆︎</span> rồi chọn <b>Thêm vào Màn hình chính</b>.</span>
+    <button class="btn btn-small" id="installHintClose" aria-label="Đóng">Đã hiểu</button>
+  </div>
   <div id="toast" class="toast" hidden></div>
 
   <script type="module" src="js/app.js"></script>

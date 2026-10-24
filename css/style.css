@@ -51,6 +51,9 @@
 [hidden] { display: none !important; }
 
 html, body { margin: 0; }
+html { -webkit-text-size-adjust: 100%; }
+button, .btn, .tab, select, label { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.piano, .key { -webkit-touch-callout: none; -webkit-user-select: none; }
 
 body {
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -629,4 +632,33 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 @media (max-width: 900px) {
   .song-layout { grid-template-columns: 1fr; }
   .song-list { max-height: 180px; }
+}
+
+/* ---------- Installed app (iPad home screen): keep clear of rounded corners & home indicator ---------- */
+.topbar {
+  padding-top: max(10px, env(safe-area-inset-top));
+  padding-left: max(20px, env(safe-area-inset-left));
+  padding-right: max(20px, env(safe-area-inset-right));
+}
+.dock {
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  padding-left: max(12px, env(safe-area-inset-left));
+  padding-right: max(12px, env(safe-area-inset-right));
+}
+.install-hint {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  top: calc(env(safe-area-inset-top) + 64px);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100vw - 32px);
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--primary);
+  box-shadow: var(--shadow);
+  font-size: 0.92rem;
 }

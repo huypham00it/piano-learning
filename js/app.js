@@ -272,11 +272,18 @@ function renderMidiStatus() {
   sel.value = midi.selectedId;
 }
 
+// iPadOS reports itself as a Mac; touch points tell them apart.
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isStandalone = window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true;
+const MIDI_HELP = isIOS
+  ? 'Safari trên iPad/iPhone không hỗ trợ Web MIDI. Để dùng đàn qua cáp MIDI, hãy mở trang web này trong app trình duyệt có Web MIDI (miễn phí trên App Store), ví dụ “Web MIDI Browser” hoặc “MIDIWeb Browser”. Không có đàn vẫn tập được bằng bàn phím trên màn hình.'
+  : 'Trình duyệt này không hỗ trợ Web MIDI. Hãy dùng Chrome, Edge hoặc Opera (máy tính hoặc Android).';
+
 async function connectMidi(silent = false) {
   if (!midi.supported) {
     $('#midiStatus').className = 'pill pill-err';
-    $('#midiStatus').textContent = 'Trình duyệt không hỗ trợ Web MIDI';
-    if (!silent) toast('Trình duyệt này không hỗ trợ Web MIDI. Hãy dùng Chrome, Edge hoặc Opera (máy tính hoặc Android).', 5000);
+    $('#midiStatus').textContent = isIOS ? 'MIDI: chưa hỗ trợ trên iPad' : 'Trình duyệt không hỗ trợ Web MIDI';
+    if (!silent) toast(MIDI_HELP, 9000);
     return;
   }
   try {
@@ -975,11 +982,24 @@ renderGrid();
 $('#kbOctave').textContent = `C${state.kbOctave}`;
 setTab('select');
 if (!midi.supported) {
-  $('#midiStatus').className = 'pill pill-err';
-  $('#midiStatus').textContent = 'Không hỗ trợ Web MIDI (dùng Chrome/Edge)';
-  $('#midiConnect').hidden = true;
+  connectMidi(true);
+  $('#midiConnect').textContent = 'Cách dùng đàn MIDI';
 } else if (state.prefs.midiAuto) {
   connectMidi(true);
+}
+
+// ---------------------------------------------------------------- installable app (PWA)
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+// Ask the browser not to evict saved songs/stats (most useful for the home-screen app).
+navigator.storage?.persist?.().catch(() => {});
+if (isIOS && !isStandalone && !load('installHintDismissed', false)) {
+  $('#installHint').hidden = false;
+  $('#installHintClose').addEventListener('click', () => {
+    $('#installHint').hidden = true;
+    save('installHintDismissed', true);
+  });
 }
 // Unlock audio on first interaction (browser autoplay policy).
 window.addEventListener('pointerdown', () => synth.ensure(), { once: true });
