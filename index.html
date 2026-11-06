@@ -362,7 +362,6 @@
               <div class="seg" id="songModes" role="group" aria-label="Chế độ">
                 <button data-mode="wait">Chờ chơi đúng</button>
                 <button data-mode="tempo">Theo nhịp</button>
-                <button data-mode="listen">Nghe mẫu</button>
               </div>
               <div class="seg" id="songHands" role="group" aria-label="Tay tập">
                 <button data-hands="R">Tay phải</button>
@@ -375,7 +374,19 @@
               <label class="inline" id="songMetroWrap"><input type="checkbox" id="songMetro" /> Máy đếm nhịp</label>
               <label class="inline"><input type="checkbox" id="songLoop" /> Lặp lại</label>
             </div>
-            <div id="songScore" class="song-score" title="Bấm vào một nốt để nhảy tới đó"></div>
+            <div class="player" id="songPlayer" role="group" aria-label="Nghe mẫu">
+              <button class="btn btn-primary" id="playBtn">🎧 Nghe mẫu</button>
+              <button class="btn" id="playStopBtn" title="Dừng và về đầu đoạn" hidden>■ Dừng</button>
+              <div class="seg seg-small" id="playParts" role="group" aria-label="Phần được chơi">
+                <button data-parts="both">Hai tay</button>
+                <button data-parts="R">Giai điệu</button>
+                <button data-parts="L">Tay trái</button>
+              </div>
+              <button class="btn btn-small" id="playOrigTempo" title="Đặt tốc độ theo bản nhạc">Tốc độ gốc</button>
+              <div class="player-bar" id="playBar" title="Bấm để nghe từ chỗ này"><div class="player-fill" id="playFill"></div></div>
+              <span class="player-pos muted small" id="playPos"></span>
+            </div>
+            <div id="songScore" class="song-score" title="Bấm vào một nốt để nghe hoặc nhảy tới đó"></div>
             <div class="hands song-status">
               <div class="hand hand-r-box"><span class="hand-tag">Tay phải</span><b id="songRH">—</b></div>
               <div class="hand hand-l-box"><span class="hand-tag">Tay trái (nốt gốc hợp âm)</span><b id="songLH">—</b></div>
@@ -419,7 +430,7 @@
           <details class="card howto">
             <summary>Lộ trình tập cho người mới</summary>
             <ol>
-              <li><b>Nghe mẫu</b> vài lần, nhìn phím sáng và số ngón tay.</li>
+              <li>Bấm <b>🎧 Nghe mẫu</b> vài lần, nhìn phím đàn tự nhấn và số ngón tay (có thể chọn nghe riêng giai điệu hoặc tay trái).</li>
               <li><b>Tay phải + Chờ chơi đúng</b>: máy chờ bạn bấm đúng từng nốt (bật “Máy chơi tay còn lại” để nghe tiếng bass).</li>
               <li><b>Tay trái + Chờ chơi đúng</b>: chỉ bấm nốt gốc khi hợp âm đổi, máy chơi giai điệu.</li>
               <li><b>Hai tay + Chờ chơi đúng</b>, tập từng đoạn ngắn (chọn “Ô nhịp … đến …”).</li>

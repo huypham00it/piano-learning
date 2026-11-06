@@ -36,9 +36,10 @@ export function createSongView(ctx) {
     save('songs', songs);
   }
   const settings = {
-    current: songs[0].id, mode: 'wait', hands: 'R', bpm: 60, accomp: true, loop: false, metro: true,
+    current: songs[0].id, mode: 'wait', hands: 'R', bpm: 60, accomp: true, loop: false, metro: true, playParts: 'both',
     ...load('songSettings', {}),
   };
+  if (settings.mode === 'listen') settings.mode = 'wait'; // listening is now the separate player
 
   const v = {
     song: null,
@@ -50,7 +51,13 @@ export function createSongView(ctx) {
     run: null,
     timers: [],
     raf: 0,
+    // Auto-play ("Nghe mẫu"): independent of the practice modes.
+    player: { state: 'stopped', pos: null, t0: 0, from: 0, next: 0, raf: 0, sounding: new Map() },
   };
+  const playing = () => v.player.state === 'playing';
+  const playerActive = () => v.player.state !== 'stopped';
+  /** Which hand(s) the status line and keyboard describe right now. */
+  const viewHands = () => (playerActive() ? v.player.parts ?? settings.playParts : settings.hands);
 
   const persist = () => {
     save('songs', songs);
@@ -78,6 +85,7 @@ export function createSongView(ctx) {
 
   function selectSong(id) {
     stopAll();
+    stopPlayer();
     settings.current = id;
     persist();
     renderLibrary();
@@ -145,6 +153,7 @@ export function createSongView(ctx) {
   let editingId = null;
   function openEditor(id) {
     stopAll();
+    stopPlayer();
     editingId = id;
     const s = songs.find((x) => x.id === id);
     $('#songEditorTitle').textContent = s ? 'Sửa bài hát' : 'Thêm bài hát mới';
@@ -207,6 +216,7 @@ export function createSongView(ctx) {
   bindSeg('#songModes', 'mode', 'mode');
   bindSeg('#songHands', 'hands', 'hands');
   $('#songBpm').addEventListener('input', (e) => {
+    if (playing()) rebasePlayer();
     settings.bpm = Number(e.target.value);
     $('#songBpmVal').textContent = settings.bpm;
     persist();
@@ -220,6 +230,7 @@ export function createSongView(ctx) {
   for (const sel of ['#songFrom', '#songTo']) {
     $(sel).addEventListener('change', () => {
       stopAll();
+      stopPlayer();
       applyRange();
       v.index = v.range[0];
       v.score.clearMarks();
@@ -235,11 +246,12 @@ export function createSongView(ctx) {
     $('#songAccomp').checked = settings.accomp;
     $('#songLoop').checked = settings.loop;
     $('#songMetro').checked = settings.metro;
-    $('#songAccompWrap').hidden = settings.hands === 'both' || settings.mode === 'listen';
+    $('#songAccompWrap').hidden = settings.hands === 'both';
     $('#songMetroWrap').hidden = settings.mode !== 'tempo';
-    $('#songStart').textContent = { wait: '▶ Bắt đầu tập', tempo: '▶ Bắt đầu (đếm vào 1 ô nhịp)', listen: '▶ Nghe mẫu' }[settings.mode];
+    $('#songStart').textContent = { wait: '▶ Bắt đầu tập', tempo: '▶ Bắt đầu (đếm vào 1 ô nhịp)' }[settings.mode];
     $('#songStart').hidden = v.running;
     $('#songStop').hidden = !v.running;
+    renderPlayer();
   }
 
   // ------------------------------------------------------------ loading a song
@@ -260,6 +272,7 @@ export function createSongView(ctx) {
     }
     v.score = renderScore($('#songScore'), song, v.events, {
       onClickEvent: (i) => {
+        if (playerActive()) return seekPlayer(v.events[i].time);
         if (v.running) return;
         v.index = i;
         showCurrent();
@@ -278,6 +291,7 @@ export function createSongView(ctx) {
     v.index = v.range[0];
     $('#songSummary').hidden = true;
     showCurrent();
+    renderPlayer();
     ctx.onRangeChange();
   }
 
@@ -345,10 +359,12 @@ export function createSongView(ctx) {
 
   function renderStatus() {
     const ev = v.events[v.index];
-    const r = required(ev, settings.mode === 'listen' ? 'both' : settings.hands);
+    const hands = viewHands();
+    const r = required(ev, hands);
     const noteText = (n) => `ngón ${n.finger} · ${pretty(n.name)}${n.octave} (${solfegeName(n.name)})`;
-    $('#songRH').textContent = r.rh ? noteText(r.rh) : ev?.rh && settings.hands === 'L' ? 'máy chơi' : '—';
-    $('#songLH').textContent = r.lh ? `${noteText(r.lh)} — hợp âm ${pretty(r.lh.chord.symbol)}` : ev?.lh && settings.hands === 'R' ? `máy chơi (${pretty(ev.lh.chord.symbol)})` : ev?.chord && !ev.chord.none ? `giữ (${pretty(ev.chord.symbol)})` : '—';
+    const other = playerActive() ? 'không phát' : 'máy chơi';
+    $('#songRH').textContent = r.rh ? noteText(r.rh) : ev?.rh && hands === 'L' ? other : '—';
+    $('#songLH').textContent = r.lh ? `${noteText(r.lh)} — hợp âm ${pretty(r.lh.chord.symbol)}` : ev?.lh && hands === 'R' ? `${other} (${pretty(ev.lh.chord.symbol)})` : ev?.chord && !ev.chord.none ? `giữ (${pretty(ev.chord.symbol)})` : '—';
     const [a, b] = v.range;
     const done = Math.max(0, Math.min(v.index, b + 1) - a);
     $('#songProgress').textContent = v.events.length ? `${done}/${b - a + 1} · ô nhịp ${v.song.measures[ev?.measure ?? 0].number}` : '—';
@@ -356,20 +372,27 @@ export function createSongView(ctx) {
 
   function pianoState(pressed) {
     const st = { pressed, target: [], correct: [], wrong: [], next: [], fingers: new Map() };
+    if (playerActive()) {
+      // Player piano: keys stay down for as long as each note sounds.
+      for (const [midi, n] of v.player.sounding) {
+        st.target.push(midi);
+        st.fingers.set(midi, { finger: n.finger, hand: n.hand });
+      }
+      for (const m of pressed) if (st.target.includes(m)) st.correct.push(m);
+      return st;
+    }
     const ev = v.events[v.index];
     if (!ev) return st;
-    const r = required(ev, settings.mode === 'listen' ? 'both' : settings.hands);
+    const r = required(ev, settings.hands);
     for (const [n, hand] of [[r.rh, 'R'], [r.lh, 'L']]) {
       if (!n) continue;
       st.target.push(n.midi);
       st.fingers.set(n.midi, { finger: n.finger, hand });
     }
-    if (settings.mode !== 'listen') {
-      const nextEv = v.events.slice(v.index + 1, v.range[1] + 1).find(hasReq);
-      if (nextEv) {
-        const nr = required(nextEv);
-        st.next = [nr.rh?.midi, nr.lh?.midi].filter((m) => m != null);
-      }
+    const nextEv = v.events.slice(v.index + 1, v.range[1] + 1).find(hasReq);
+    if (nextEv) {
+      const nr = required(nextEv);
+      st.next = [nr.rh?.midi, nr.lh?.midi].filter((m) => m != null);
     }
     for (const m of pressed) if (st.target.includes(m)) st.correct.push(m);
     return st;
@@ -381,6 +404,7 @@ export function createSongView(ctx) {
     return { lo: Math.min(...all), hi: Math.max(...all), focus: pianoFocus() };
   }
   function pianoFocus() {
+    if (playerActive()) return [...v.player.sounding.keys()];
     const ev = v.events[v.index];
     return ev ? [ev.rh?.midi, ev.lh?.midi].filter((m) => m != null) : [];
   }
@@ -393,7 +417,7 @@ export function createSongView(ctx) {
 
   // ------------------------------------------------------------ note input
   function onNoteOn(m) {
-    if (!v.score || !v.events.length) return;
+    if (!v.score || !v.events.length || playerActive()) return;
     if (!v.running) {
       // Not practising: pressing the shown key still moves along, so the score doubles as a guide.
       if (settings.mode === 'wait') startWait(true);
@@ -466,7 +490,7 @@ export function createSongView(ctx) {
     showCurrent();
   }
 
-  // ---- tempo & listen modes: a moving cursor
+  // ---- tempo mode: a moving cursor with count-in and hit windows
   function startClock() {
     stopAll();
     synth.ensure();
@@ -495,7 +519,7 @@ export function createSongView(ctx) {
     };
     v.index = a;
     renderControls();
-    feedback(mode === 'tempo' ? `Đếm vào ${countIn} phách… rồi chơi theo vạch xanh (${HANDS_LABEL[settings.hands]}).` : 'Đang phát mẫu — nhìn phím đàn và số ngón tay.', 'info');
+    feedback(`Đếm vào ${countIn} phách… rồi chơi theo vạch xanh (${HANDS_LABEL[settings.hands]}).`, 'info');
     showCurrent();
     const tol = Math.min(0.45, Math.max(0.15, 0.28 / beatSec())); // beats
     v.run.tol = tol;
@@ -519,11 +543,10 @@ export function createSongView(ctx) {
       }
       if (songT >= run.startT) {
         v.score.setCursorX(v.score.xOfTime(Math.min(songT, run.endT)));
-        // Play events as they arrive (all of them when listening, the other hand when practising).
+        // Play the other hand's notes as they arrive.
         while (run.next <= b && v.events[run.next].time <= songT) {
           const ev = v.events[run.next];
-          if (mode === 'listen') playEvent(ev, { both: true });
-          else accompany(ev);
+          accompany(ev);
           v.index = run.next;
           v.score.setCurrent(run.next);
           renderStatus();
@@ -598,6 +621,7 @@ export function createSongView(ctx) {
   // ------------------------------------------------------------ run control
   function start() {
     if (!v.events.length) return;
+    stopPlayer();
     $('#songSummary').hidden = true;
     if (settings.mode === 'wait') {
       v.index = v.range[0];
@@ -650,10 +674,6 @@ export function createSongView(ctx) {
       html += pct >= 90
         ? `<p class="feedback ok">Tuyệt! Tăng tốc độ lên ${Math.min(160, settings.bpm + 5)} BPM nhé.</p>`
         : `<p class="muted">Giảm tốc độ hoặc tập “Chờ chơi đúng” thêm vài lần trước.</p>`;
-    } else {
-      feedback('Đã phát xong.', 'info');
-      showCurrent();
-      return;
     }
     if (worst.length) {
       html += `<p>Ô nhịp cần tập thêm (bấm để tập riêng):</p><div class="chip-list">${worst
@@ -690,13 +710,223 @@ export function createSongView(ctx) {
   }
 
   $('#songStart').addEventListener('click', start);
-  $('#songStop').addEventListener('click', () => (v.run?.mode === 'listen' ? stopAll() : finish()));
+  $('#songStop').addEventListener('click', () => finish());
   $('#songRestart').addEventListener('click', () => {
     stopAll();
+    stopPlayer();
     v.index = v.range[0];
     v.score?.clearMarks();
     feedback('', 'info');
     showCurrent();
+  });
+
+
+  // ------------------------------------------------------------ auto-play ("Nghe mẫu")
+  const rangeTimes = () => {
+    const startT = v.song.measures.find((m) => m.number === v.rangeMeasures[0]).start;
+    const lastM = v.song.measures.find((m) => m.number === v.rangeMeasures[1]);
+    return [startT, lastM.start + lastM.length];
+  };
+  const playerTime = () => {
+    const p = v.player;
+    if (p.state !== 'playing') return p.pos;
+    return p.from + (performance.now() - p.t0) / (beatSec() * 1000);
+  };
+
+  function playParts(ev) {
+    const parts = v.player.parts;
+    return { rh: parts !== 'L' && ev.rh ? ev.rh : null, lh: parts !== 'R' && ev.lh ? ev.lh : null };
+  }
+
+  function togglePlay() {
+    if (!v.events.length) return;
+    if (playing()) return pausePlayer();
+    stopAll();
+    synth.ensure();
+    $('#songSummary').hidden = true;
+    const p = v.player;
+    const [startT, endT] = rangeTimes();
+    if (p.state === 'stopped') {
+      // Start from a note the learner clicked, otherwise from the start of the chosen measures.
+      const clicked = v.events[v.index];
+      p.pos = clicked && clicked.index > v.range[0] && clicked.index <= v.range[1] ? clicked.time : startT;
+      v.score.clearMarks();
+    }
+    p.parts = settings.playParts;
+    p.startT = startT;
+    p.endT = endT;
+    p.state = 'playing';
+    p.from = p.pos;
+    p.t0 = performance.now();
+    p.next = firstEventAt(p.pos);
+    feedback('🎧 Đang phát mẫu — phím đàn tự nhấn kèm số ngón tay. Bấm vào bản nhạc hoặc thanh tiến độ để nghe từ chỗ khác.', 'info');
+    renderPlayer();
+    cancelAnimationFrame(p.raf);
+    p.raf = requestAnimationFrame(playerTick);
+  }
+
+  function firstEventAt(t) {
+    const i = v.events.findIndex((e) => e.index >= v.range[0] && e.time >= t - 1e-6);
+    return i < 0 || i > v.range[1] ? v.range[1] + 1 : i;
+  }
+
+  function playerTick() {
+    const p = v.player;
+    if (p.state !== 'playing') return;
+    const t = playerTime();
+    const sec = beatSec();
+    let changed = false;
+    while (p.next <= v.range[1] && v.events[p.next].time <= t) {
+      const ev = v.events[p.next];
+      const parts = playParts(ev);
+      for (const [n, hand, beats, vel] of [[parts.rh, 'R', parts.rh && soundBeats(parts.rh), 82], [parts.lh, 'L', parts.lh?.dur, 66]]) {
+        if (!n) continue;
+        synth.noteOn(n.midi, vel, 0, Math.max(0.15, beats * sec * 0.95));
+        p.sounding.set(n.midi, { until: ev.time + beats * 0.95, finger: n.finger, hand });
+      }
+      v.index = p.next;
+      v.score.setCurrent(p.next);
+      p.next++;
+      changed = true;
+    }
+    for (const [midi, n] of p.sounding) {
+      if (n.until <= t) {
+        p.sounding.delete(midi);
+        changed = true;
+      }
+    }
+    v.score.setCursorX(v.score.xOfTime(Math.min(t, p.endT)));
+    $('#playFill').style.width = `${Math.min(100, Math.max(0, ((t - p.startT) / (p.endT - p.startT)) * 100))}%`;
+    renderPlayerPos(t);
+    if (changed) {
+      renderStatus();
+      ctx.refresh();
+    }
+    if (t >= p.endT) {
+      if (settings.loop) {
+        p.sounding.clear();
+        p.from = p.startT;
+        p.t0 = performance.now();
+        p.next = firstEventAt(p.startT);
+      } else {
+        stopPlayer();
+        feedback('Đã phát xong. Giờ thử tự chơi ở chế độ “Chờ chơi đúng” nhé!', 'ok');
+        return;
+      }
+    }
+    p.raf = requestAnimationFrame(playerTick);
+  }
+
+  function pausePlayer() {
+    const p = v.player;
+    p.pos = playerTime();
+    p.state = 'paused';
+    cancelAnimationFrame(p.raf);
+    for (const midi of p.sounding.keys()) synth.noteOff(midi);
+    p.sounding.clear();
+    feedback('⏸ Đã tạm dừng — bấm “Nghe tiếp” để phát tiếp.', 'info');
+    renderPlayer();
+    ctx.refresh();
+  }
+
+  /** Stop playback and go back to the start of the chosen measures. */
+  function stopPlayer() {
+    const p = v.player;
+    if (p.state === 'stopped') return;
+    cancelAnimationFrame(p.raf);
+    for (const midi of p.sounding.keys()) synth.noteOff(midi);
+    p.sounding.clear();
+    p.state = 'stopped';
+    p.pos = null;
+    v.index = v.range[0];
+    $('#playFill').style.width = '0%';
+    renderPlayer();
+    if (v.score) showCurrent();
+  }
+
+  /** Keep the current position when the tempo changes mid-play. */
+  function rebasePlayer() {
+    const p = v.player;
+    p.from = playerTime();
+    p.t0 = performance.now();
+  }
+
+  function seekPlayer(t) {
+    const p = v.player;
+    const [startT, endT] = rangeTimes();
+    t = Math.max(startT, Math.min(endT - 1e-3, t));
+    for (const midi of p.sounding.keys()) synth.noteOff(midi);
+    p.sounding.clear();
+    p.next = firstEventAt(t);
+    if (p.state === 'playing') {
+      p.from = t;
+      p.t0 = performance.now();
+    } else {
+      p.pos = t;
+      v.index = Math.min(p.next, v.range[1]);
+      v.score.setCurrent(v.index);
+      v.score.setCursorX(v.score.xOfTime(t));
+      $('#playFill').style.width = `${((t - startT) / (endT - startT)) * 100}%`;
+      renderPlayerPos(t);
+      renderStatus();
+      ctx.refresh();
+    }
+  }
+
+  function renderPlayerPos(t) {
+    if (!v.song || t == null) {
+      $('#playPos').textContent = '';
+      return;
+    }
+    const m = [...v.song.measures].reverse().find((x) => x.start <= t + 1e-6) ?? v.song.measures[0];
+    $('#playPos').textContent = `Ô ${m.number} / ${v.rangeMeasures[1]}`;
+  }
+
+  function renderPlayer() {
+    const p = v.player;
+    $('#playBtn').textContent = p.state === 'playing' ? '⏸ Tạm dừng' : p.state === 'paused' ? '▶ Nghe tiếp' : '🎧 Nghe mẫu';
+    $('#playStopBtn').hidden = p.state === 'stopped';
+    $$('#playParts button').forEach((b) => b.classList.toggle('active', b.dataset.parts === settings.playParts));
+    const tempo = v.song?.meta.tempo;
+    $('#playOrigTempo').hidden = !tempo;
+    $('#playOrigTempo').textContent = `Tốc độ gốc (♩ = ${tempo})`;
+    if (p.state === 'stopped') renderPlayerPos(null);
+  }
+
+  $('#playBtn').addEventListener('click', togglePlay);
+  $('#playStopBtn').addEventListener('click', () => {
+    stopPlayer();
+    feedback('', 'info');
+  });
+  $$('#playParts button').forEach((b) =>
+    b.addEventListener('click', () => {
+      settings.playParts = b.dataset.parts;
+      v.player.parts = settings.playParts;
+      persist();
+      renderPlayer();
+      renderStatus();
+    }),
+  );
+  $('#playOrigTempo').addEventListener('click', () => {
+    if (!v.song?.meta.tempo) return;
+    if (playing()) rebasePlayer();
+    settings.bpm = clamp(v.song.meta.tempo, 30, 160);
+    persist();
+    renderControls();
+  });
+  $('#playBar').addEventListener('click', (e) => {
+    if (!v.events.length) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const [startT, endT] = rangeTimes();
+    const t = startT + ((e.clientX - r.left) / r.width) * (endT - startT);
+    if (!playerActive()) {
+      v.player.state = 'paused';
+      v.player.parts = settings.playParts;
+      v.player.startT = startT;
+      v.player.endT = endT;
+    }
+    seekPlayer(t);
+    renderPlayer();
   });
 
   // ------------------------------------------------------------ init
@@ -709,7 +939,10 @@ export function createSongView(ctx) {
     pianoState,
     noteRange,
     spellContext,
-    stop: stopAll,
+    stop() {
+      stopAll();
+      if (playing()) pausePlayer();
+    },
     render() {
       renderControls();
       if (v.score) showCurrent();
