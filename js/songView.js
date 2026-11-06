@@ -1,6 +1,6 @@
 // UI controller for the "Bài hát" tab: song library, editor and practice
 // (right hand plays the melody one note at a time, left hand plays the chord's bass/root note).
-import { parseSong, splitSongs, buildEvents, keyScaleNotes } from './song.js';
+import { parseSong, splitSongs, buildEvents, keyScaleNotes, rhNotes } from './song.js';
 import { renderScore } from './scoreView.js';
 import { DEMO_SONGS } from './demoSongs.js';
 import { load, save } from './storage.js';
@@ -339,7 +339,7 @@ export function createSongView(ctx) {
   function playEvent(ev, { both = false, skip = {} } = {}) {
     if (!ev) return;
     const sec = beatSec();
-    if (ev.rh && (both || !skip.rh)) synth.noteOn(ev.rh.midi, 80, 0, Math.max(0.15, soundBeats(ev.rh) * sec * 0.95));
+    if (ev.rh && (both || !skip.rh)) for (const n of rhNotes(ev.rh)) synth.noteOn(n.midi, 80, 0, Math.max(0.15, soundBeats(ev.rh) * sec * 0.95));
     if (ev.lh && (both || !skip.lh)) synth.noteOn(ev.lh.midi, 65, 0, Math.max(0.2, ev.lh.dur * sec * 0.95));
   }
 
@@ -363,7 +363,8 @@ export function createSongView(ctx) {
     const r = required(ev, hands);
     const noteText = (n) => `ngón ${n.finger} · ${pretty(n.name)}${n.octave} (${solfegeName(n.name)})`;
     const other = playerActive() ? 'không phát' : 'máy chơi';
-    $('#songRH').textContent = r.rh ? noteText(r.rh) : ev?.rh && hands === 'L' ? other : '—';
+    const rhText = (n) => (n.harmony ? rhNotes(n).map((x) => `${pretty(x.name)}${x.octave} (ngón ${x.finger})`).join(' + ') : noteText(n));
+    $('#songRH').textContent = r.rh ? rhText(r.rh) : ev?.rh && hands === 'L' ? other : '—';
     $('#songLH').textContent = r.lh ? `${noteText(r.lh)} — hợp âm ${pretty(r.lh.chord.symbol)}` : ev?.lh && hands === 'R' ? `${other} (${pretty(ev.lh.chord.symbol)})` : ev?.chord && !ev.chord.none ? `giữ (${pretty(ev.chord.symbol)})` : '—';
     const [a, b] = v.range;
     const done = Math.max(0, Math.min(v.index, b + 1) - a);
@@ -384,7 +385,7 @@ export function createSongView(ctx) {
     const ev = v.events[v.index];
     if (!ev) return st;
     const r = required(ev, settings.hands);
-    for (const [n, hand] of [[r.rh, 'R'], [r.lh, 'L']]) {
+    for (const [n, hand] of [...rhNotes(r.rh).map((x) => [x, 'R']), [r.lh, 'L']]) {
       if (!n) continue;
       st.target.push(n.midi);
       st.fingers.set(n.midi, { finger: n.finger, hand });
@@ -392,7 +393,7 @@ export function createSongView(ctx) {
     const nextEv = v.events.slice(v.index + 1, v.range[1] + 1).find(hasReq);
     if (nextEv) {
       const nr = required(nextEv);
-      st.next = [nr.rh?.midi, nr.lh?.midi].filter((m) => m != null);
+      st.next = [...rhNotes(nr.rh).map((x) => x.midi), nr.lh?.midi].filter((m) => m != null);
     }
     for (const m of pressed) if (st.target.includes(m)) st.correct.push(m);
     return st;
@@ -400,13 +401,13 @@ export function createSongView(ctx) {
 
   function noteRange() {
     if (!v.events.length) return null;
-    const all = v.events.flatMap((e) => [e.rh?.midi, e.lh?.midi]).filter((m) => m != null);
+    const all = v.events.flatMap((e) => [...rhNotes(e.rh).map((x) => x.midi), e.lh?.midi]).filter((m) => m != null);
     return { lo: Math.min(...all), hi: Math.max(...all), focus: pianoFocus() };
   }
   function pianoFocus() {
     if (playerActive()) return [...v.player.sounding.keys()];
     const ev = v.events[v.index];
-    return ev ? [ev.rh?.midi, ev.lh?.midi].filter((m) => m != null) : [];
+    return ev ? [...rhNotes(ev.rh).map((x) => x.midi), ev.lh?.midi].filter((m) => m != null) : [];
   }
 
   /** Key-signature spelling so played notes are named like the sheet (Bb rather than A#). */
@@ -433,7 +434,7 @@ export function createSongView(ctx) {
   function startWait(silent = false) {
     stopAll();
     v.running = true;
-    v.run = { mode: 'wait', mistakes: 0, perMeasure: new Map(), clean: 0, total: 0, startedAt: performance.now(), hit: { rh: false, lh: false }, evMistakes: 0 };
+    v.run = { mode: 'wait', mistakes: 0, perMeasure: new Map(), clean: 0, total: 0, startedAt: performance.now(), hit: { rh: new Set(), lh: false }, evMistakes: 0 };
     v.score.clearMarks();
     if (v.index < v.range[0] || v.index > v.range[1]) v.index = v.range[0];
     skipToRequired();
@@ -456,27 +457,29 @@ export function createSongView(ctx) {
     if (!ev) return;
     const r = required(ev);
     const run = v.run;
-    if (r.rh && m === r.rh.midi) run.hit.rh = true;
-    else if (r.lh && m < (r.rh ? r.rh.midi : 60) && mod12(m) === mod12(r.lh.midi)) run.hit.lh = true;
+    const rhMidis = rhNotes(r.rh).map((x) => x.midi);
+    const lowestRh = rhMidis.length ? Math.min(...rhMidis) : 60;
+    if (rhMidis.includes(m)) run.hit.rh.add(m);
+    else if (r.lh && m < lowestRh && mod12(m) === mod12(r.lh.midi)) run.hit.lh = true;
     else if (isBassOf(m, ev) || (r.lh && run.hit.lh && mod12(m) === mod12(r.lh.midi))) return; // harmless bass note
     else {
       run.mistakes++;
       run.evMistakes++;
       const num = v.song.measures[ev.measure].number;
       run.perMeasure.set(num, (run.perMeasure.get(num) ?? 0) + 1);
-      const want = [r.rh && `${pretty(r.rh.name)}${r.rh.octave} (ngón ${r.rh.finger})`, r.lh && `${pretty(r.lh.name)}${r.lh.octave} tay trái`].filter(Boolean).join(' + ');
+      const want = [...rhNotes(r.rh).map((x) => `${pretty(x.name)}${x.octave} (ngón ${x.finger})`), r.lh && `${pretty(r.lh.name)}${r.lh.octave} tay trái`].filter(Boolean).join(' + ');
       feedback(`✗ Chưa đúng phím — cần ${want}.`, 'bad');
       v.score.mark(ev.index, 'bad');
       return;
     }
-    if ((r.rh && !run.hit.rh) || (r.lh && !run.hit.lh)) return;
+    if (rhMidis.some((x) => !run.hit.rh.has(x)) || (r.lh && !run.hit.lh)) return;
     // Event complete.
     run.total++;
     if (!run.evMistakes) run.clean++;
     v.score.mark(ev.index, run.evMistakes ? 'late' : 'ok');
     feedback(run.evMistakes ? '✓ Đúng rồi, tiếp tục!' : '', run.evMistakes ? 'ok' : 'info');
     run.evMistakes = 0;
-    run.hit = { rh: false, lh: false };
+    run.hit = { rh: new Set(), lh: false };
     accompany(ev);
     // Let the app play following events that need nothing from the learner, in time.
     const start = ev.time;
@@ -595,7 +598,8 @@ export function createSongView(ctx) {
       if (d > run.tol) continue;
       const r = required(ev);
       const h = run.hits.get(i) ?? {};
-      const part = r.rh && !h.rh && m === r.rh.midi ? 'rh' : r.lh && !h.lh && m < 60 && mod12(m) === mod12(r.lh.midi) ? 'lh' : null;
+      const rhm = rhNotes(r.rh).map((x) => x.midi);
+      const part = r.rh && !h.rh && rhm.includes(m) && !(h.rhSet?.has(m)) ? 'rh' : r.lh && !h.lh && m < 60 && mod12(m) === mod12(r.lh.midi) ? 'lh' : null;
       if (part && d < bestD) {
         best = { i, part };
         bestD = d;
@@ -603,7 +607,10 @@ export function createSongView(ctx) {
     }
     if (best) {
       const h = run.hits.get(best.i) ?? {};
-      h[best.part] = true;
+      if (best.part === 'rh') {
+        (h.rhSet ??= new Set()).add(m);
+        h.rh = rhNotes(v.events[best.i].rh).every((x) => h.rhSet.has(x.midi));
+      } else h.lh = true;
       run.hits.set(best.i, h);
       const ev = v.events[best.i];
       if (isComplete(ev)) {
@@ -646,7 +653,7 @@ export function createSongView(ctx) {
       const run = v.run;
       v.index = v.range[0];
       v.score.clearMarks();
-      run.hit = { rh: false, lh: false };
+      run.hit = { rh: new Set(), lh: false };
       feedback('↻ Lặp lại đoạn nhạc', 'info');
       skipToRequired();
       showCurrent();
@@ -779,7 +786,8 @@ export function createSongView(ctx) {
     while (p.next <= v.range[1] && v.events[p.next].time <= t) {
       const ev = v.events[p.next];
       const parts = playParts(ev);
-      for (const [n, hand, beats, vel] of [[parts.rh, 'R', parts.rh && soundBeats(parts.rh), 82], [parts.lh, 'L', parts.lh?.dur, 66]]) {
+      const rhBeats = parts.rh && soundBeats(parts.rh);
+      for (const [n, hand, beats, vel] of [...rhNotes(parts.rh).map((x, k) => [x, 'R', rhBeats, k ? 70 : 82]), [parts.lh, 'L', parts.lh?.dur, 66]]) {
         if (!n) continue;
         synth.noteOn(n.midi, vel, 0, Math.max(0.15, beats * sec * 0.95));
         p.sounding.set(n.midi, { until: ev.time + beats * 0.95, finger: n.finger, hand });

@@ -110,3 +110,26 @@ C4h | C4q D4q E4q | C4h`);
   assert.equal(parseSong('3/4 C4h. | D4h.').meta.time, '3/4');
   assert.equal(parseSong('time: 2/4\nC4h |\ntime: 5/3\nD4h').errors.length, 1);
 });
+
+test('right hand can strike several notes together (two-part writing)', async () => {
+  const { rhNotes } = await import('../js/song.js');
+  const s = parseSong(`time: 2/4
+[Am] C5+E5e. A4+C5s B4+D5e E5+C5e | [Dm] A4+D5q. F4+B4e | [E7] E4e E4+B4e E4+B4s C5s D4+B4e | [Am] C4+A4h`);
+  assert.deepEqual(s.errors, []);
+  assert.deepEqual(s.warnings, []);
+  const first = s.notes[0];
+  assert.equal(first.name + first.octave, 'E5'); // the highest pitch is the melody
+  assert.deepEqual(first.harmony.map((h) => h.name + h.octave), ['C5']);
+  const ev = buildEvents(s);
+  const fingers = (e) => rhNotes(e.rh).map((n) => n.finger);
+  for (const e of ev) {
+    const f = fingers(e);
+    // distinct fingers, melody finger highest
+    assert.equal(new Set(f).size, f.length);
+    assert.ok(f.every((x, i) => i === 0 || x < f[i - 1]));
+  }
+  assert.deepEqual(fingers(ev[0]), [5, 3]); // C5+E5 with 3 and 5
+  assert.deepEqual(fingers(ev.at(-1)), [5, 1]); // C4+A4 spans a sixth: 1 and 5
+  // Duplicate pitches collapse to one note.
+  assert.equal(parseSong('A4+A4q').notes[0].harmony, undefined);
+});

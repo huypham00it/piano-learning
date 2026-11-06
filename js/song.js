@@ -9,6 +9,8 @@
 //   [Dm] F4q G4e E4e | [Am/C] E4e E4s G4s C4e C4e | ...
 // Notes: letter + optional #/b/##/bb + octave + duration (w h q e s), optional "." (dotted),
 // optional "3" (triplet), optional "~" (tie to the next note). Rests: r + duration (re, rq.).
+// Several right-hand notes struck together (two-part writing): join pitches with "+", e.g. C5+E5e.
+// The highest note is the melody.
 // [Chord] applies from the next note or rest. "|" separates measures. Lines starting with // are comments.
 import { LETTER_PC, TYPE_BY_ID, CHORD_TYPES, makeNote, parseNoteName, respell, mod12, noteName } from './theory.js';
 
@@ -68,14 +70,46 @@ export function parseChordSymbol(sym) {
   };
 }
 
-function parseNoteToken(tok) {
-  const m = /^([A-G])(##|bb|#|b)?(-?\d)([whqes])(\.?)(3?)(~?)$/.exec(tok);
-  if (!m) return null;
+const PITCH = '[A-G](?:##|bb|#|b)?-?\\d';
+const NOTE_RE = new RegExp(`^((?:${PITCH}\\+)*${PITCH})([whqes])(\\.?)(3?)(~?)$`);
+
+function parsePitch(p) {
+  const m = /^([A-G])(##|bb|#|b)?(-?\d)$/.exec(p);
   const acc = { '##': 2, '#': 1, b: -1, bb: -2 }[m[2]] ?? 0;
-  const letter = 'CDEFGAB'.indexOf(m[1]);
-  let dur = DUR[m[4]] * (m[5] ? 1.5 : 1);
-  if (m[6]) dur = (dur * 2) / 3;
-  return { ...makeNote(letter, acc, Number(m[3])), dur, base: m[4], dotted: !!m[5], triplet: !!m[6], tieNext: !!m[7] };
+  return makeNote('CDEFGAB'.indexOf(m[1]), acc, Number(m[3]));
+}
+
+function parseNoteToken(tok) {
+  const m = NOTE_RE.exec(tok);
+  if (!m) return null;
+  // Highest pitch = melody; the others are struck with it (same duration).
+  const pitches = m[1].split('+').map(parsePitch).sort((a, b) => b.midi - a.midi);
+  const harmony = pitches.slice(1).filter((p, i, arr) => p.midi !== pitches[0].midi && arr.findIndex((q) => q.midi === p.midi) === i);
+  let dur = DUR[m[2]] * (m[3] ? 1.5 : 1);
+  if (m[4]) dur = (dur * 2) / 3;
+  const note = { ...pitches[0], dur, base: m[2], dotted: !!m[3], triplet: !!m[4], tieNext: !!m[5] };
+  if (harmony.length) note.harmony = harmony;
+  return note;
+}
+
+/** Fingers needed below the melody note to reach its harmony notes (a third ≈ 2 fingers apart). */
+function harmonySteps(top, harmony = []) {
+  let prev = top.midi;
+  return harmony.map((h) => {
+    const d = prev - h.midi;
+    prev = h.midi;
+    return d <= 2 ? 1 : d <= 5 ? 2 : d <= 8 ? 3 : 4;
+  });
+}
+
+/** Give harmony notes the fingers under the melody finger. */
+function fingerHarmony(top) {
+  if (!top.harmony) return;
+  let f = top.finger;
+  top.harmony.forEach((h, i) => {
+    f = Math.max(1, f - harmonySteps(top, top.harmony)[i]);
+    h.finger = f;
+  });
 }
 
 function parseRestToken(tok) {
@@ -286,8 +320,10 @@ export function fingerSequence(seq, hand = 'R') {
   if (!seq.length) return [];
   const sign = hand === 'R' ? 1 : -1; // left hand: mirror the keyboard
   const F = [1, 2, 3, 4, 5];
+  // Notes struck together with lower notes need a high enough melody finger (minFinger).
+  const reach = (f, item) => (item.minFinger && f < item.minFinger ? 25 : 0);
   const startBias = (f, m) => (isBlackPc(mod12(m)) && f === 1 ? 2 : 0) + Math.abs(f - 3) * 0.05;
-  let cost = F.map((f) => startBias(f, seq[0].midi));
+  let cost = F.map((f) => startBias(f, seq[0].midi) + reach(f, seq[0]));
   const back = [];
   for (let i = 1; i < seq.length; i++) {
     const prev = cost;
@@ -296,7 +332,7 @@ export function fingerSequence(seq, hand = 'R') {
       let best = Infinity;
       let arg = 0;
       F.forEach((f1, j) => {
-        const c = prev[j] + moveCost(sign * seq[i - 1].midi, f1, sign * seq[i].midi, f2, seq[i].relaxed);
+        const c = prev[j] + moveCost(sign * seq[i - 1].midi, f1, sign * seq[i].midi, f2, seq[i].relaxed) + reach(f2, seq[i]);
         if (c < best) {
           best = c;
           arg = j;
@@ -337,13 +373,23 @@ export function buildEvents(song) {
   const times = [...new Set([...attacks.map((n) => n.start), ...lhChords.map((c) => c.start)].map((x) => round6(x)))].sort((a, b) => a - b);
 
   const rhFingers = fingerSequence(
-    attacks.map((n, i) => ({ midi: n.midi, relaxed: i > 0 && n.start - (attacks[i - 1].start + attacks[i - 1].dur) > 0.2 || (i > 0 && attacks[i - 1].dur >= 1.5) })),
+    attacks.map((n, i) => ({
+      midi: n.midi,
+      relaxed: (i > 0 && n.start - (attacks[i - 1].start + attacks[i - 1].dur) > 0.2) || (i > 0 && attacks[i - 1].dur >= 1.5),
+      minFinger: n.harmony ? Math.min(5, 1 + harmonySteps(n, n.harmony).reduce((a, b) => a + b, 0)) : 0,
+    })),
     'R',
   );
-  attacks.forEach((n, i) => (n.finger = rhFingers[i]));
-  // Tied continuations keep the same finger.
+  attacks.forEach((n, i) => {
+    n.finger = rhFingers[i];
+    fingerHarmony(n);
+  });
+  // Tied continuations keep the same fingers.
   song.notes.forEach((n, i) => {
-    if (n.tiedFrom) n.finger = song.notes[i - 1].finger;
+    if (!n.tiedFrom) return;
+    const prev = song.notes[i - 1];
+    n.finger = prev.finger;
+    n.harmony?.forEach((h, k) => (h.finger = prev.harmony?.[k]?.finger ?? h.finger));
   });
 
   const lhNotes = lhChords.map((c, i) => {
@@ -366,6 +412,9 @@ export function buildEvents(song) {
 }
 
 const round6 = (x) => Math.round(x * 1e6) / 1e6;
+
+/** All right-hand notes struck at once for a melody note (melody first, then lower notes). */
+export const rhNotes = (n) => (n ? [n, ...(n.harmony ?? [])] : []);
 
 /** Spelled scale notes of the key (for naming played notes). */
 export function keyScaleNotes(sig) {

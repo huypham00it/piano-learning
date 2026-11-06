@@ -6,8 +6,8 @@ import { prettyName } from './theory.js';
 
 const SP = 10;
 const HALF = SP / 2;
-const SECTION_Y = 13;
-const CHORD_Y = 30;
+const SECTION_Y = 11;
+const CHORD_Y = 25;
 const RH_FINGER_Y = 47;
 const MEASURE_NUM_Y = 63;
 const TREBLE_BOTTOM_Y = 114; // E4
@@ -77,7 +77,9 @@ export function renderScore(container, song, events, { onClickEvent } = {}) {
       if (it.rest) addOnset(it.start);
       else {
         it.shownAcc = it.tiedFrom ? null : displayAcc(it, 'T');
-        addOnset(it.start, it.shownAcc != null);
+        for (const h of it.harmony ?? []) h.shownAcc = it.tiedFrom ? null : displayAcc(h, 'T');
+        const anyAcc = it.shownAcc != null || (it.harmony ?? []).some((h) => h.shownAcc != null);
+        addOnset(it.start, anyAcc);
       }
     }
     for (const s of lhSegs.filter((x) => x.measure === m.index)) {
@@ -185,11 +187,17 @@ export function renderScore(container, song, events, { onClickEvent } = {}) {
       }
       const g = el('g', { class: 'sn' }, svg);
       const y = stepY(it.step, 'treble');
-      drawNote(g, nx, y, it.step, 'treble', it, it.shownAcc);
+      const extra = (it.harmony ?? []).map((h) => ({ step: h.step, y: stepY(h.step, 'treble'), shownAcc: h.shownAcc }));
+      drawNote(g, nx, y, it.step, 'treble', it, it.shownAcc, extra);
       const evIndex = it.tiedFrom ? null : evByRh.get(it);
       if (evIndex != null) {
         evGroups[evIndex].push(g);
-        if (it.finger) el('text', { x: nx, y: RH_FINGER_Y, class: 'score-finger rh', 'text-anchor': 'middle' }, svg).textContent = it.finger;
+        // Finger numbers above the staff, melody finger on top.
+        const fingers = [it, ...(it.harmony ?? [])].map((n) => n.finger).filter(Boolean);
+        fingers.forEach((f, k) => {
+          const fy = RH_FINGER_Y - (fingers.length - 1 - k) * 10;
+          el('text', { x: nx, y: fy, class: 'score-finger rh', 'text-anchor': 'middle' }, svg).textContent = f;
+        });
       }
       if (it.tieNext) it.tieFromX = nx;
       if (it.tiedFrom) {
@@ -299,25 +307,42 @@ function drawLedgers(g, x, step, clef) {
   for (let s = top + 2; s <= step; s += 2) el('line', { x1: x - 9, x2: x + 9, y1: stepY(s, clef), y2: stepY(s, clef), stroke: 'var(--staff-ink)', 'stroke-width': 1.2 }, g);
 }
 
-function drawNote(g, x, y, step, clef, it, shownAcc) {
-  drawLedgers(g, x, step, clef);
-  if (shownAcc != null) {
-    const spec = ACC[shownAcc] ?? ACC[0];
-    glyph(g, spec.name, x - 9 - spec.width - 2 - 56 * spec.scale, y + spec.anchor * spec.scale, spec.scale, 'currentColor');
+/** Draw a note (or several notes struck together: `extra` = [{step, y, shownAcc}]) with one stem. */
+function drawNote(g, x, y, step, clef, it, shownAcc, extra = []) {
+  const heads = [{ step, y, shownAcc }, ...extra].sort((a, b) => b.step - a.step);
+  const lo = heads[heads.length - 1];
+  const hi = heads[0];
+  drawLedgers(g, x, lo.step, clef);
+  drawLedgers(g, x, hi.step, clef);
+  // Accidentals, staggered leftwards when they would collide.
+  let col = 0;
+  let lastAccStep = null;
+  for (const h of heads) {
+    if (h.shownAcc == null) continue;
+    if (lastAccStep != null && lastAccStep - h.step < 6) col++;
+    else col = 0;
+    lastAccStep = h.step;
+    const spec = ACC[h.shownAcc] ?? ACC[0];
+    glyph(g, spec.name, x - 9 - spec.width - 2 - col * 10 - 56 * spec.scale, h.y + spec.anchor * spec.scale, spec.scale, 'currentColor');
   }
   const hollow = it.base === 'h' || it.base === 'w';
-  el('ellipse', { cx: x, cy: y, rx: 6.2, ry: 4.4, fill: 'currentColor', transform: `rotate(-20 ${x} ${y})` }, g);
-  if (hollow) el('ellipse', { cx: x, cy: y, rx: 3.6, ry: 2.2, fill: 'var(--staff-paper)', transform: `rotate(-35 ${x} ${y})` }, g);
-  if (it.dotted) {
-    const onLine = (step - (clef === 'treble' ? 30 : 18)) % 2 === 0;
-    el('circle', { cx: x + 10, cy: onLine ? y - 3 : y, r: 1.7, fill: 'currentColor' }, g);
+  for (const h of heads) {
+    // A second (adjacent step) above another head goes on the other side of the stem.
+    const dx = heads.some((o) => o !== h && o.step === h.step - 1) ? 12 : 0;
+    el('ellipse', { cx: x + dx, cy: h.y, rx: 6.2, ry: 4.4, fill: 'currentColor', transform: `rotate(-20 ${x + dx} ${h.y})` }, g);
+    if (hollow) el('ellipse', { cx: x + dx, cy: h.y, rx: 3.6, ry: 2.2, fill: 'var(--staff-paper)', transform: `rotate(-35 ${x + dx} ${h.y})` }, g);
+    if (it.dotted) {
+      const onLine = (h.step - (clef === 'treble' ? 30 : 18)) % 2 === 0;
+      el('circle', { cx: x + 10 + dx, cy: onLine ? h.y - 3 : h.y, r: 1.7, fill: 'currentColor' }, g);
+    }
   }
   if (it.base === 'w') return;
   const middle = clef === 'treble' ? 34 : 22;
-  const up = step < middle;
+  const up = (hi.step + lo.step) / 2 < middle;
   const sx = up ? x + 5.6 : x - 5.6;
-  const sy = up ? y - 32 : y + 32;
-  el('line', { x1: sx, x2: sx, y1: y, y2: sy, stroke: 'currentColor', 'stroke-width': 1.3 }, g);
+  const y0 = up ? lo.y : hi.y;
+  const sy = up ? hi.y - 32 : lo.y + 32;
+  el('line', { x1: sx, x2: sx, y1: y0, y2: sy, stroke: 'currentColor', 'stroke-width': 1.3 }, g);
   const flags = { e: 1, s: 2 }[it.base] ?? 0;
   for (let i = 0; i < flags; i++) {
     const fy = up ? sy + i * 7 : sy - i * 7;
