@@ -88,8 +88,12 @@ export function renderScore(container, song, events, { onClickEvent } = {}) {
   }
   const times = [...onsets.keys()].sort((a, b) => a - b);
   const measureStarts = new Set(song.measures.map((m) => Math.round(m.start * 1e6) / 1e6));
+  const timeChangeAt = new Map(
+    song.measures.filter((m) => m.timeChange && m.index > 0).map((m) => [Math.round(m.start * 1e6) / 1e6, m.time]),
+  );
   const xOf = new Map();
   const barX = [];
+  const timeSigs = []; // mid-song time signature changes: {x, time}
   let x = header;
   let prevT = null;
   for (const t of times) {
@@ -100,6 +104,10 @@ export function renderScore(container, song, events, { onClickEvent } = {}) {
         const bx = x + Math.max(16, gap - 10);
         barX.push({ t, x: bx });
         x = bx + 18;
+        if (timeChangeAt.has(t)) {
+          timeSigs.push({ x: bx + 8, time: timeChangeAt.get(t) });
+          x += 22;
+        }
       } else x += gap;
     }
     if (o.acc) x += 9;
@@ -136,12 +144,15 @@ export function renderScore(container, song, events, { onClickEvent } = {}) {
       glyph(svg, spec.name, 44 + i * 8 - 56 * spec.scale, stepY(step, clef) + spec.anchor * spec.scale, spec.scale, ink);
     }
   }
-  const [tn, td] = song.meta.time.split('/');
-  const tsx = 44 + Math.abs(sig) * 8 + 8;
-  for (const [y0, y1] of [[TREBLE_BOTTOM_Y - 20, TREBLE_BOTTOM_Y], [BASS_BOTTOM_Y - 20, BASS_BOTTOM_Y]]) {
-    el('text', { x: tsx, y: y0 - 2, class: 'score-time' }, svg).textContent = tn;
-    el('text', { x: tsx, y: y1 - 2, class: 'score-time' }, svg).textContent = td;
-  }
+  const drawTime = (tx, time) => {
+    const [tn, td] = time.split('/');
+    for (const [y0, y1] of [[TREBLE_BOTTOM_Y - 20, TREBLE_BOTTOM_Y], [BASS_BOTTOM_Y - 20, BASS_BOTTOM_Y]]) {
+      el('text', { x: tx, y: y0 - 2, class: 'score-time' }, svg).textContent = tn;
+      el('text', { x: tx, y: y1 - 2, class: 'score-time' }, svg).textContent = td;
+    }
+  };
+  drawTime(44 + Math.abs(sig) * 8 + 8, song.measures[0]?.time ?? song.meta.time);
+  for (const ts of timeSigs) drawTime(ts.x, ts.time);
 
   // ---- measure numbers & section labels
   for (const m of song.measures) {

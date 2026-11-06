@@ -5,6 +5,7 @@
 //   title: Tên bài            composer: Tác giả
 //   key: Dm                   time: 2/4            tempo: 75
 //   @Điệp khúc                (section label for the next measure)
+//   time: 3/4  (or a 3/4 token) after the music has started = time signature change from the next measure
 //   [Dm] F4q G4e E4e | [Am/C] E4e E4s G4s C4e C4e | ...
 // Notes: letter + optional #/b/##/bb + octave + duration (w h q e s), optional "." (dotted),
 // optional "3" (triplet), optional "~" (tie to the next note). Rests: r + duration (re, rq.).
@@ -108,10 +109,35 @@ export function parseSong(text) {
   let pendingChord = null;
   let current = null;
   let t = 0;
+  let curTime = null; // time signature in force (null until the music starts)
+  let timeChange = false;
+  const TIME_RE = /^(\d{1,2})\/(1|2|4|8|16)$/;
 
   const openMeasure = () => {
-    current = { index: measures.length, start: t, items: [], section: pendingSection, chordAt: [] };
+    current = { index: measures.length, start: t, items: [], section: pendingSection, chordAt: [], time: curTime ?? meta.time, timeChange };
     pendingSection = null;
+    timeChange = false;
+  };
+  /** A time signature met after the music has started applies to the next measure (or this one, if still empty). */
+  const changeTime = (value, li) => {
+    if (!TIME_RE.test(value)) {
+      errors.push(`Dòng ${li + 1}: chỉ nhịp “${value}” không hợp lệ (ví dụ đúng: 2/4, 3/4, 6/8).`);
+      return;
+    }
+    if (!measures.length && (!current || (!current.items.length && !current.chordAt.length))) {
+      // Before the first note: this is simply the song's time signature.
+      meta.time = value;
+      if (current) current.time = value;
+      curTime = value;
+      return;
+    }
+    if (current && !current.items.length && !current.chordAt.length) {
+      current.time = value;
+      current.timeChange = measures.length > 0;
+    } else {
+      timeChange = true;
+    }
+    curTime = value;
   };
   const closeMeasure = () => {
     if (current && (current.items.length || current.chordAt.length)) {
@@ -127,7 +153,8 @@ export function parseSong(text) {
     const head = /^(title|composer|key|time|tempo)\s*:\s*(.*)$/i.exec(line);
     if (head) {
       const k = head[1].toLowerCase();
-      meta[k] = k === 'tempo' ? Number(head[2]) || meta.tempo : head[2].trim();
+      if (k === 'time' && (measures.length || current)) changeTime(head[2].trim(), li);
+      else meta[k] = k === 'tempo' ? Number(head[2]) || meta.tempo : head[2].trim();
       return;
     }
     if (line.startsWith('@')) {
@@ -138,6 +165,10 @@ export function parseSong(text) {
     for (const tok of tokens) {
       if (tok === '|') {
         closeMeasure();
+        continue;
+      }
+      if (TIME_RE.test(tok)) {
+        changeTime(tok, li);
         continue;
       }
       if (!current) openMeasure();
@@ -172,18 +203,26 @@ export function parseSong(text) {
   });
   closeMeasure();
 
-  const [num, den] = String(meta.time).split('/').map(Number);
-  const beatsPerMeasure = num && den ? (num * 4) / den : 4;
-  meta.time = `${num || 4}/${den || 4}`;
+  const beatsOf = (time) => {
+    const [num, den] = String(time).split('/').map(Number);
+    return num && den ? (num * 4) / den : 4;
+  };
+  if (!TIME_RE.test(String(meta.time))) meta.time = '4/4';
+  for (const m of measures) {
+    if (!TIME_RE.test(String(m.time))) m.time = meta.time;
+    m.beats = beatsOf(m.time);
+  }
+  const beatsPerMeasure = measures[0]?.beats ?? beatsOf(meta.time);
+  meta.timeChanges = measures.some((m) => m.timeChange);
 
   // Measure numbering: a short first measure is a pickup (measure 0).
-  const pickup = measures.length > 1 && measures[0].length < beatsPerMeasure - EPS;
+  const pickup = measures.length > 1 && measures[0].length < measures[0].beats - EPS;
   measures.forEach((m, i) => {
     m.number = pickup ? i : i + 1;
-    const full = Math.abs(m.length - beatsPerMeasure) < EPS;
+    const full = Math.abs(m.length - m.beats) < EPS;
     const isEdge = i === 0 || i === measures.length - 1;
-    if (!full && !(isEdge && m.length < beatsPerMeasure)) {
-      warnings.push(`Ô nhịp ${m.number}: tổng trường độ ${round(m.length)} phách, cần ${round(beatsPerMeasure)} phách.`);
+    if (!full && !(isEdge && m.length < m.beats)) {
+      warnings.push(`Ô nhịp ${m.number}: tổng trường độ ${round(m.length)} phách, cần ${round(m.beats)} phách (nhịp ${m.time}).`);
     }
   });
 

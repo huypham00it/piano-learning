@@ -87,3 +87,26 @@ test('demo songs parse cleanly', () => {
   }
   assert.equal(splitSongs(DEMO_SONGS.join('\n===\n')).length, 2);
 });
+
+test('time signature changes inside a song', () => {
+  const s = parseSong(`time: 2/4
+[Am] A4h |
+time: 3/4
+[E7] G#4q D5e E5e D5e C5e |
+2/4 E4q B4q | [Am] A4h`);
+  assert.deepEqual(s.errors, []);
+  assert.deepEqual(s.warnings, []);
+  assert.deepEqual(s.measures.map((m) => m.time), ['2/4', '3/4', '2/4', '2/4']);
+  assert.deepEqual(s.measures.map((m) => m.beats), [2, 3, 2, 2]);
+  assert.deepEqual(s.measures.map((m) => !!m.timeChange), [false, true, true, false]);
+  assert.equal(s.meta.time, '2/4');
+  assert.equal(s.meta.timeChanges, true);
+  assert.equal(s.pickup, false);
+  // A 3-beat measure under 2/4 is reported.
+  const bad = parseSong(`time: 2/4
+C4h | C4q D4q E4q | C4h`);
+  assert.match(bad.warnings[0], /cần 2 phách/);
+  // A leading time token is just the song's time signature.
+  assert.equal(parseSong('3/4 C4h. | D4h.').meta.time, '3/4');
+  assert.equal(parseSong('time: 2/4\nC4h |\ntime: 5/3\nD4h').errors.length, 1);
+});

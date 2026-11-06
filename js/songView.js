@@ -250,7 +250,7 @@ export function createSongView(ctx) {
     v.song = song;
     v.events = song.errors.length ? [] : buildEvents(song);
     $('#songTitle').textContent = song.meta.title;
-    $('#songMeta').textContent = [song.meta.composer, `Giọng ${pretty(song.meta.key)}`, `Nhịp ${song.meta.time}`, song.meta.tempo ? `♩ = ${song.meta.tempo}` : '']
+    $('#songMeta').textContent = [song.meta.composer, `Giọng ${pretty(song.meta.key)}`, `Nhịp ${song.meta.time}${song.meta.timeChanges ? ' (có đổi nhịp)' : ''}`, song.meta.tempo ? `♩ = ${song.meta.tempo}` : '']
       .filter(Boolean)
       .join(' · ');
     if (song.errors.length) {
@@ -475,7 +475,7 @@ export function createSongView(ctx) {
     const startT = v.song.measures.find((m) => m.number === v.rangeMeasures[0]).start;
     const lastM = v.song.measures.find((m) => m.number === v.rangeMeasures[1]);
     const endT = lastM.start + lastM.length;
-    const bpm = v.song.beatsPerMeasure;
+    const bpm = v.song.measures.find((m) => m.number === v.rangeMeasures[0])?.beats ?? v.song.beatsPerMeasure;
     const countIn = mode === 'tempo' ? Math.round(bpm) : 0;
     v.running = true;
     v.score.clearMarks();
